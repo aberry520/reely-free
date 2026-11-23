@@ -386,10 +386,46 @@ export function buildMarketplaceAccountScript(
     }
     return out;
   }
+  // The report is rendered INTO the page itself (v2): a red
+  // beacon strip across the very top proves the new script is
+  // actually running in the door — it depends on nothing but the
+  // injection — and a dark panel at the bottom carries the full
+  // report as plain text for a screenshot. (v1 posted the report
+  // to the app for a native box; nothing appeared at all, which
+  // left script-delivery and the message bridge indistinguishable.)
+  function renderBeacon(text) {
+    var host = document.body || document.documentElement;
+    if (!host) return;
+    var b = document.getElementById('rf-diag-beacon');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'rf-diag-beacon';
+      b.style.cssText =
+        'position:fixed;top:0;left:0;right:0;height:20px;' +
+        'z-index:2147483647;background:#e11d48;color:#fff;' +
+        'font:11px/20px monospace;text-align:center;';
+      host.appendChild(b);
+    }
+    b.textContent = text;
+  }
+  function renderPanel(text) {
+    var host = document.body || document.documentElement;
+    if (!host) return;
+    var panel = document.getElementById('rf-diag-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'rf-diag-panel';
+      panel.style.cssText =
+        'position:fixed;left:0;right:0;bottom:0;max-height:46%;' +
+        'overflow:auto;z-index:2147483647;background:rgba(10,10,10,0.94);' +
+        'color:#7dff8a;font:10px/1.5 monospace;padding:8px;' +
+        'white-space:pre-wrap;word-break:break-all;';
+      host.appendChild(panel);
+    }
+    panel.textContent = text;
+  }
   function sendDiag() {
     try {
-      if (!window.ReactNativeWebView ||
-          !window.ReactNativeWebView.postMessage) return;
       var bar = null;
       try { bar = findTabBar(); } catch (e) {}
       var sigs = [];
@@ -400,24 +436,37 @@ export function buildMarketplaceAccountScript(
       for (var h = 0; h < hEls.length && h < 4; h++) {
         hdrs.push(desc(hEls[h]));
       }
-      var report = {
-        type: 'rf-diag',
-        path: location.pathname,
-        vw: window.innerWidth,
-        vh: window.innerHeight,
-        sigCount: sigs.length,
-        sigPaths: sigs.map(function (a) { return pathOf(a); }).slice(0, 8),
-        bar: bar ? desc(bar) : 'NONE',
-        barIcons: bar ? iconControls(bar) : 0,
-        cover: cover
-          ? desc(cover) + ' display=' + cover.style.display
-          : 'not-created',
-        hdrs: hdrs,
-        atHome: chain(document.elementFromPoint(55, 28), 5),
-        atMid: chain(document.elementFromPoint(200, 28), 5),
-        atBell: chain(document.elementFromPoint(290, 28), 5)
-      };
-      window.ReactNativeWebView.postMessage(JSON.stringify(report));
+      var sigPaths = sigs.map(function (a) { return pathOf(a); }).slice(0, 8);
+      var coverDesc = cover
+        ? desc(cover) + ' display=' + cover.style.display
+        : 'not-created';
+      renderBeacon(
+        'RF-DIAG v2 sig=' + sigs.length +
+        ' bar=' + (bar ? 'FOUND' : 'NONE') +
+        ' brand=' + S.brandHeader);
+      var lines = [
+        'RF-DIAG v2',
+        'path=' + location.pathname +
+          ' vw=' + window.innerWidth + ' vh=' + window.innerHeight,
+        'S brand=' + S.brandHeader + ' stay=' + S.stay +
+          ' promo=' + S.blockAppPromo + ' msg=' + S.allowMessages,
+        'sig=' + sigs.length + ' paths=' + sigPaths.join(' '),
+        'bar=' + (bar ? desc(bar) : 'NONE') +
+          ' icons=' + (bar ? iconControls(bar) : 0),
+        'cover=' + coverDesc,
+        'hdrs: ' + hdrs.join(' | '),
+        'atHome: ' + chain(document.elementFromPoint(55, 44), 5).join(' > '),
+        'atMid: ' + chain(document.elementFromPoint(200, 44), 5).join(' > '),
+        'atBell: ' + chain(document.elementFromPoint(290, 44), 5).join(' > ')
+      ].join('\\n');
+      renderPanel(lines);
+      if (window.ReactNativeWebView &&
+          window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'rf-diag',
+          text: lines
+        }));
+      }
     } catch (e) {}
   }
   if (S.brandHeader) {
@@ -425,8 +474,8 @@ export function buildMarketplaceAccountScript(
     var diagTimer = setInterval(function () {
       diagSent++;
       sendDiag();
-      if (diagSent >= 3) clearInterval(diagTimer);
-    }, 2500);
+      if (diagSent >= 4) clearInterval(diagTimer);
+    }, 2000);
   }
   true;
 })();
