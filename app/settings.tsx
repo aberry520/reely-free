@@ -160,7 +160,7 @@ export default function SettingsScreen() {
             <>
               <ToggleRow
                 label="Block Reels"
-                detail="Hides Reels in the feed and Watch, and the shortcuts that lead to them."
+                detail="Hides Reels in the feed and Watch. Shortcuts that lead to them stay, with the Reely Free icon in place of the Reels icon, and do nothing when tapped."
                 value={settings.fbBlockReels}
                 onChange={set('fbBlockReels')}
               />
@@ -203,7 +203,7 @@ export default function SettingsScreen() {
             <>
               <ToggleRow
                 label="Block opening Reels"
-                detail="Reels still show in the feed, but tapping one does nothing — you can't fall into the swipe-through Reels viewer. The Reels entry is hidden and the Reels feed sends you home."
+                detail="Reels still show in the feed, but tapping one does nothing — you can't fall into the swipe-through Reels viewer. The Reels entry shows the Reely Free icon instead of the Reels icon, and the Reels feed sends you home."
                 value={settings.igBlockReels}
                 onChange={set('igBlockReels')}
               />
@@ -240,7 +240,7 @@ export default function SettingsScreen() {
             <>
               <ToggleRow
                 label="Block Shorts"
-                detail="Hides Shorts shelves and the Shorts button. A Shorts link someone sends you opens as a normal video instead."
+                detail="Hides Shorts shelves. The Shorts button stays, with the Reely Free icon in place of its own, and does nothing when tapped. A Shorts link someone sends you opens as a normal video instead."
                 value={settings.ytBlockShorts}
                 onChange={set('ytBlockShorts')}
               />

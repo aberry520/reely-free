@@ -1,5 +1,5 @@
 import type { FilterSettings } from '../lib/settings';
-import { LOGO_FULL_DATA_URI } from './logo-data';
+import { LOGO_FULL_DATA_URI, LOGO_MARK_DATA_URI } from './logo-data';
 
 // Builds the JavaScript injected into instagram.com before page content
 // loads. Stable hooks only (URLs, visible label text) instead of class
@@ -16,7 +16,8 @@ import { LOGO_FULL_DATA_URI } from './logo-data';
 // So v3 hides NOTHING in the feed: reels and suggested posts show
 // like everything else. Instead, the endless-scroll surfaces are
 // closed off:
-// - The Reels feed redirects home and its nav entry is hidden
+// - The Reels feed redirects home and its nav entry carries the
+//   Reely Free mark instead of the Reels icon (branded, inert)
 //   (unchanged from v1 — that part never caused trouble). Explore is
 //   different (his follow-up, 2026-11-23): Search lives ON the Explore
 //   page, so the page and its nav entry stay — instead a Reely
@@ -41,16 +42,47 @@ export function buildInstagramScript(settings: FilterSettings): string {
     blockAppPromo: settings.igBlockAppPromo,
   });
   const logo = JSON.stringify(LOGO_FULL_DATA_URI);
+  const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
   return `
 (function () {
   var S = ${s};
   var LOGO = ${logo};
+  var MARK = ${mark};
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
       el.style.setProperty('display', 'none', 'important');
     }
+  }
+  // Removed-entry branding (Austin, 2026-11-23): a nav entry for a
+  // removed rabbit hole (Reels) is no longer hidden — its icon is
+  // replaced with the Reely Free mark (icon-only version, the
+  // header/footer rule), so the slot stays but is visibly Reely
+  // Free's. The entry is inert: taps are swallowed here as well as
+  // by the global reel-tap block below. Idempotent via the flag.
+  function brandIcon(el) {
+    try {
+      if (!el || el.getAttribute('data-rf-branded')) return;
+      el.setAttribute('data-rf-branded', '1');
+      var icons = el.querySelectorAll('svg, img, i');
+      for (var q = 0; q < icons.length; q++) {
+        icons[q].style.setProperty('display', 'none', 'important');
+      }
+      var img = document.createElement('img');
+      img.src = MARK;
+      img.alt = 'Reely Free';
+      img.setAttribute('data-rf-mark', '1');
+      img.style.cssText =
+        'width:26px;height:26px;border-radius:7px;display:block;' +
+        'margin:auto;object-fit:cover;';
+      el.appendChild(img);
+      el.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      }, true);
+    } catch (e) {}
   }
   // Explore cover (Austin's idea, 2026-11-23, after the grid-hide
   // didn't take on his phone): don't hide or remove ANYTHING — lay a
@@ -238,10 +270,12 @@ export function buildInstagramScript(settings: FilterSettings): string {
       } else {
         removeCover();
       }
-      // Nav entries that lead to Reels: hide the entry. (Nav is
-      // static chrome, not feed content — hiding it never caused
-      // the scrolling problem. The Explore entry stays: it's the
-      // way into Search.)
+      // Nav entries that lead to Reels: the entry stays, branded
+      // with the Reely Free mark instead of the Reels icon (it used
+      // to be hidden; Austin asked for the mark in its place,
+      // 2026-11-23). Nav is static chrome, not feed content, so
+      // this never caused the scrolling problem. The Explore entry
+      // stays untouched: it's the way into Search.
       var navSel = [];
       if (S.blockReels) navSel.push('a[href="/reels/"], a[href^="/reels/"], [aria-label="Reels"]');
       if (navSel.length) {
@@ -249,7 +283,7 @@ export function buildInstagramScript(settings: FilterSettings): string {
         for (var i = 0; i < navEls.length; i++) {
           var nav = navEls[i];
           var link = nav.closest ? (nav.closest('a') || nav) : nav;
-          if (!link.closest || !link.closest('article')) hide(link);
+          if (!link.closest || !link.closest('article')) brandIcon(link);
         }
       }
       // Get-the-app banners and bars, same labels Meta uses everywhere.

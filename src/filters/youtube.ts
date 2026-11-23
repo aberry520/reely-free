@@ -1,4 +1,5 @@
 import type { FilterSettings } from '../lib/settings';
+import { LOGO_MARK_DATA_URI } from './logo-data';
 
 // Builds the JavaScript injected into m.youtube.com before page content
 // loads. Rules target stable hooks (URLs, element tags, visible text) rather
@@ -15,15 +16,54 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     blockAppPromo: settings.ytBlockAppPromo,
     swipeDownBack: settings.ytSwipeDownBack,
   });
+  const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
   return `
 (function () {
   var S = ${s};
+  var MARK = ${mark};
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
       el.style.setProperty('display', 'none', 'important');
     }
+  }
+  // Removed-entry branding (Austin, 2026-11-23): the Shorts
+  // button in the bottom pivot bar is no longer hidden — its icon
+  // is replaced with the Reely Free mark (icon-only version, the
+  // header/footer rule) and its label cleared, so the slot stays
+  // but is visibly Reely Free's. The button is inert: taps are
+  // swallowed. Idempotent via the flag.
+  function brandShorts(item) {
+    try {
+      if (!item || item.getAttribute('data-rf-branded')) return;
+      item.setAttribute('data-rf-branded', '1');
+      var icons = item.querySelectorAll('svg, img, i, yt-icon');
+      for (var q = 0; q < icons.length; q++) {
+        icons[q].style.setProperty('display', 'none', 'important');
+      }
+      var labels = item.querySelectorAll('span, div, p');
+      for (var l = 0; l < labels.length; l++) {
+        if ((labels[l].textContent || '').trim() === 'Shorts' &&
+            !labels[l].querySelector('span, div, p')) {
+          labels[l].textContent = '';
+        }
+      }
+      var host = item.querySelector('a, button, [role="button"]') || item;
+      var img = document.createElement('img');
+      img.src = MARK;
+      img.alt = 'Reely Free';
+      img.setAttribute('data-rf-mark', '1');
+      img.style.cssText =
+        'width:26px;height:26px;border-radius:7px;display:block;' +
+        'margin:auto;object-fit:cover;';
+      host.appendChild(img);
+      item.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      }, true);
+    } catch (e) {}
   }
   // Walk up from a link to the card/renderer that wraps it and hide that.
   function hideCard(node) {
@@ -52,13 +92,23 @@ export function buildYouTubeScript(settings: FilterSettings): string {
           'ytm-reel-shelf-renderer, ytm-reel-item-renderer, ' +
           'yt-shorts-lockup-view-model, ytm-shorts-lockup-view-model');
         for (var i = 0; i < shelves.length; i++) hide(shelves[i]);
-        // Any card whose main link is a Short.
+        // Any card whose main link is a Short. The pivot bar's
+        // Shorts button is not a card — it gets branded below,
+        // never hidden.
         var links = document.querySelectorAll('a[href^="/shorts/"]');
-        for (var j = 0; j < links.length; j++) hideCard(links[j]);
-        // The Shorts button in the bottom pivot bar (matched by its label).
+        for (var j = 0; j < links.length; j++) {
+          if (links[j].closest &&
+              links[j].closest('ytm-pivot-bar-item-renderer')) continue;
+          hideCard(links[j]);
+        }
+        // The Shorts button in the bottom pivot bar (matched by
+        // its label): branded with the Reely Free mark instead of
+        // hidden. Note the label is cleared by branding, so the
+        // text match only fires on the first pass — the branded
+        // flag keeps later passes from touching it again.
         var items = document.querySelectorAll('ytm-pivot-bar-item-renderer');
         for (var k = 0; k < items.length; k++) {
-          if ((items[k].textContent || '').trim() === 'Shorts') hide(items[k]);
+          if ((items[k].textContent || '').trim() === 'Shorts') brandShorts(items[k]);
         }
       }
       if (S.hideUpNext && path === '/watch') {

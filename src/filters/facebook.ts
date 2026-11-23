@@ -1,4 +1,5 @@
 import type { FilterSettings } from '../lib/settings';
+import { LOGO_MARK_DATA_URI } from './logo-data';
 
 // Builds the JavaScript injected into facebook.com before page content
 // loads. Rules target stable hooks (URLs, role="article", visible label
@@ -16,15 +17,47 @@ export function buildFacebookScript(settings: FilterSettings): string {
     blockAppPromo: settings.fbBlockAppPromo,
     stickyHeader: settings.fbStickyHeader,
   });
+  const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
   return `
 (function () {
   var S = ${s};
+  var MARK = ${mark};
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
       el.style.setProperty('display', 'none', 'important');
     }
+  }
+  // Removed-entry branding (Austin, 2026-11-23): a nav/shortcut
+  // entry for a removed rabbit hole (Reels) is no longer hidden —
+  // its icon is replaced with the Reely Free mark (icon-only
+  // version, the header/footer rule), so the slot stays but is
+  // visibly Reely Free's. The entry is inert: taps are swallowed.
+  // Idempotent via the flag; the reel-card sweep below skips
+  // branded entries so they are never hidden as "cards".
+  function brandIcon(el) {
+    try {
+      if (!el || el.getAttribute('data-rf-branded')) return;
+      el.setAttribute('data-rf-branded', '1');
+      var icons = el.querySelectorAll('svg, img, i');
+      for (var q = 0; q < icons.length; q++) {
+        icons[q].style.setProperty('display', 'none', 'important');
+      }
+      var img = document.createElement('img');
+      img.src = MARK;
+      img.alt = 'Reely Free';
+      img.setAttribute('data-rf-mark', '1');
+      img.style.cssText =
+        'width:26px;height:26px;border-radius:7px;display:block;' +
+        'margin:auto;object-fit:cover;';
+      el.appendChild(img);
+      el.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      }, true);
+    } catch (e) {}
   }
   // Walk up from a link to a plausible card container and hide that.
   function hideCard(node) {
@@ -60,13 +93,16 @@ export function buildFacebookScript(settings: FilterSettings): string {
         location.replace('/');
         return;
       }
-      // Nav / shortcut entries that lead to Reels: hide the link itself.
+      // Nav / shortcut entries that lead to Reels: the entry
+      // stays, branded with the Reely Free mark instead of the
+      // Reels icon (it used to be hidden; Austin asked for the
+      // mark in its place, 2026-11-23).
       if (S.blockReels) {
         var navLinks = document.querySelectorAll('a[href*="/reel/"]');
         for (var i = 0; i < navLinks.length; i++) {
           var inArticle = navLinks[i].closest
             ? navLinks[i].closest('[role="article"]') : null;
-          if (!inArticle) hide(navLinks[i]);
+          if (!inArticle) brandIcon(navLinks[i]);
         }
       }
       var posts = document.querySelectorAll('[role="article"]');
@@ -88,10 +124,14 @@ export function buildFacebookScript(settings: FilterSettings): string {
         }
       }
       // Reel cards outside articles (e.g. in Watch): hide by their link.
+      // Branded nav entries are not cards — never hide them.
       if (S.blockReels) {
         var reelLinks = document.querySelectorAll('a[href*="/reel/"]');
         for (var k = 0; k < reelLinks.length; k++) {
-          if (!reelLinks[k].getAttribute('data-rf-hidden')) hideCard(reelLinks[k]);
+          if (reelLinks[k].getAttribute('data-rf-hidden')) continue;
+          if (reelLinks[k].closest &&
+              reelLinks[k].closest('[data-rf-branded]')) continue;
+          hideCard(reelLinks[k]);
         }
       }
       // The 'Open app' bar and other get-the-app banners: find the
