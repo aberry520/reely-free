@@ -268,7 +268,7 @@ export default function SettingsScreen() {
         <>
           <ToggleRow
             label="Floating home button"
-            detail="A movable button that's always on screen. Drag it anywhere; tap it to go home."
+            detail="A movable button that's always on screen. Drag it anywhere; tap it to go home; long-press it to jump straight to another app that's turned on."
             value={settings.navButton}
             onChange={set('navButton')}
           />

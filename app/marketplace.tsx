@@ -37,6 +37,7 @@ export default function MarketplaceGuestScreen() {
   // search does the same job.
   return (
     <SiteBrowser
+      appId="marketplace"
       homeUrl="https://www.facebook.com/marketplace/"
       buildScript={buildMarketplaceGuestScript}
       userAgent={DESKTOP_UA}

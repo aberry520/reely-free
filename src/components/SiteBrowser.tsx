@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -37,7 +38,46 @@ interface SiteBrowserProps {
   // URL fragments that must never load (e.g. Facebook's login/signup
   // pages on the guest door, where signing in is not the point).
   blockUrlFragments?: string[];
+  // Which door this is — the home button's long-press switcher lists
+  // the OTHER enabled doors, so it needs to know the current one.
+  appId?: AppId;
 }
+
+export type AppId = 'facebook' | 'youtube' | 'marketplace';
+
+// The doors the home button can hot-swap between (Austin's ask,
+// 2026-11-23): long-pressing the floating button lists the enabled
+// ones besides the door you're in, and tapping one jumps straight
+// there — no trip home first.
+const APPS: {
+  id: AppId;
+  label: string;
+  route: '/facebook' | '/youtube' | '/marketplace';
+  color: string;
+  enabled: (s: FilterSettings) => boolean;
+}[] = [
+  {
+    id: 'facebook',
+    label: 'Facebook',
+    route: '/facebook',
+    color: '#1877f2',
+    enabled: (s) => s.featureFacebook,
+  },
+  {
+    id: 'youtube',
+    label: 'YouTube',
+    route: '/youtube',
+    color: '#c4302b',
+    enabled: (s) => s.featureYouTube,
+  },
+  {
+    id: 'marketplace',
+    label: 'Marketplace — no account',
+    route: '/marketplace',
+    color: '#0f766e',
+    enabled: (s) => s.featureGuestMarketplace,
+  },
+];
 
 const BTN = 50;
 const BTN_POS_KEY = 'reelyfree-homebtn-v1';
@@ -51,7 +91,9 @@ const BTN_POS_KEY = 'reelyfree-homebtn-v1';
 // - right-edge swipe: a thin zone on the right edge, swipe left to go home
 // - bottom swipe: a bar at the bottom center (iOS often steals this one)
 // - the translucent floating home button: draggable anywhere, snaps to the
-//   nearest side, remembers its spot across both sites; a tap goes home
+//   nearest side, remembers its spot across all doors; a tap goes home,
+//   a long-press opens the app switcher (jump straight to another
+//   enabled door)
 // If he turns all four off, the button stays anyway as a fallback so a site
 // screen can never become a dead end.
 export default function SiteBrowser({
@@ -62,6 +104,7 @@ export default function SiteBrowser({
   incognito,
   resettable,
   blockUrlFragments,
+  appId,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   // Getting Home has no feature master (Austin's hierarchy,
@@ -189,20 +232,45 @@ export default function SiteBrowser({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Long-press on the home button opens the app switcher. The press
+  // timer only survives a still finger: any real drag cancels it, and
+  // a fired long-press suppresses the tap-to-go-home on release.
+  const [swapOpen, setSwapOpen] = useState(false);
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+  const clearPressTimer = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
+
   const btnPan = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           dragStartRef.current = { ...posRef.current };
+          longPressedRef.current = false;
+          clearPressTimer();
+          pressTimerRef.current = setTimeout(() => {
+            longPressedRef.current = true;
+            setSwapOpen(true);
+          }, 450);
         },
         onPanResponderMove: (_, g) => {
+          if (Math.hypot(g.dx, g.dy) >= 8) clearPressTimer();
           pan.setValue({
             x: dragStartRef.current.x + g.dx,
             y: dragStartRef.current.y + g.dy,
           });
         },
         onPanResponderRelease: (_, g) => {
+          clearPressTimer();
+          if (longPressedRef.current) {
+            longPressedRef.current = false;
+            return;
+          }
           if (Math.hypot(g.dx, g.dy) < 8) {
             goHome();
             return;
@@ -226,6 +294,10 @@ export default function SiteBrowser({
           AsyncStorage.setItem(BTN_POS_KEY, JSON.stringify(target)).catch(
             () => {},
           );
+        },
+        onPanResponderTerminate: () => {
+          clearPressTimer();
+          longPressedRef.current = false;
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,7 +423,7 @@ export default function SiteBrowser({
       {showButton && btnReady && (
         <Animated.View
           {...btnPan.panHandlers}
-          accessibilityLabel="Go home"
+          accessibilityLabel="Go home — long-press to switch apps"
           style={[
             styles.homeBtn,
             {
@@ -360,10 +432,72 @@ export default function SiteBrowser({
             },
           ]}
         >
-          <Text style={[styles.homeBtnGlyph, { color: theme.homeBtnGlyph }]}>
-            ⌂
-          </Text>
+          <MaterialIcons
+            name="home"
+            size={28}
+            color={theme.homeBtnGlyph}
+          />
         </Animated.View>
+      )}
+      {swapOpen && (
+        <View style={styles.swapOverlay}>
+          <Pressable
+            style={styles.swapBackdrop}
+            onPress={() => setSwapOpen(false)}
+          />
+          <View
+            style={[
+              styles.swapPanel,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                bottom: insets.bottom + 90,
+              },
+            ]}
+          >
+            <Text style={[styles.swapTitle, { color: theme.muted }]}>
+              Jump to…
+            </Text>
+            {APPS.filter((a) => a.id !== appId && a.enabled(settings)).map(
+              (a) => (
+                <Pressable
+                  key={a.id}
+                  style={styles.swapRow}
+                  onPress={() => {
+                    setSwapOpen(false);
+                    // Replace, not push: swapping shouldn't stack the
+                    // doors on top of each other in the back history.
+                    router.replace(a.route);
+                  }}
+                >
+                  <View
+                    style={[styles.swapDot, { backgroundColor: a.color }]}
+                  />
+                  <Text style={[styles.swapLabel, { color: theme.text }]}>
+                    {a.label}
+                  </Text>
+                </Pressable>
+              ),
+            )}
+            <Pressable
+              style={styles.swapRow}
+              onPress={() => {
+                setSwapOpen(false);
+                goHome();
+              }}
+            >
+              <MaterialIcons
+                name="home"
+                size={20}
+                color={theme.muted}
+                style={styles.swapHomeIcon}
+              />
+              <Text style={[styles.swapLabel, { color: theme.text }]}>
+                Home
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -461,9 +595,49 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 10,
   },
-  homeBtnGlyph: {
-    fontSize: 27,
-    lineHeight: 30,
-    marginTop: -3,
+  swapOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
   },
+  swapBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  swapPanel: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  swapTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    paddingVertical: 6,
+  },
+  swapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+  },
+  swapDot: { width: 14, height: 14, borderRadius: 7, marginRight: 12 },
+  swapHomeIcon: { marginRight: 9, marginLeft: -3 },
+  swapLabel: { fontSize: 16, fontWeight: '600' },
 });
