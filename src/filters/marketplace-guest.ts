@@ -30,6 +30,21 @@ export function buildMarketplaceGuestScript(
 (function () {
   var S = ${s};
   if (!S.dismissLogin && !S.blockLoginBar) { true; return; }
+  // Persistent hide: an inline display:none can be wiped when Facebook's
+  // React re-renders the node (his recording, 2026-11-23: the panel was
+  // hidden, then popped back). A stylesheet rule keyed on the marker
+  // attribute survives inline-style resets, so once an element is marked
+  // it stays hidden. Re-injected from apply() if the page drops it.
+  function ensureStyle() {
+    try {
+      if (document.getElementById('rf-guest-style')) return;
+      var st = document.createElement('style');
+      st.id = 'rf-guest-style';
+      st.textContent = '[data-rf-hidden]{display:none !important;}';
+      (document.head || document.documentElement).appendChild(st);
+    } catch (e) {}
+  }
+  ensureStyle();
   function isListingHolder(el) {
     try {
       return !!(el.querySelector &&
@@ -172,6 +187,7 @@ export function buildMarketplaceGuestScript(
       for (var i = 0; i < ctrls.length; i++) {
         var c = ctrls[i];
         if (c.getAttribute('data-rf-hidden')) continue;
+        if (c.closest && c.closest('[data-rf-hidden]')) continue;
         var t = (c.textContent || '').trim();
         var isLogin = t === 'Log In' || t === 'Log in';
         var isCreate = t === 'Create new account' || t === 'Create account';
@@ -187,26 +203,32 @@ export function buildMarketplaceGuestScript(
           continue;
         }
         // Panel: climb while ancestors still hold both controls, stay
-        // wide, stay under ~75% of the viewport tall, and never swallow
-        // listings.
+        // wide, stay under ~80% of the viewport tall, and never swallow
+        // listings. The climb must NOT stop at narrow ancestors: in his
+        // screenshot the two buttons sit in a centered column about
+        // half the panel's width, so the first ancestors are narrow and
+        // only the panel itself is wide — record any ancestor that
+        // qualifies and keep climbing to the outermost one, stopping
+        // only at a listing holder or when height runs away (ancestors
+        // only get taller from there).
         var best = null;
         var el = c.parentElement;
         var depth = 0;
-        while (el && depth < 10) {
+        while (el && depth < 12) {
           depth++;
           if (isListingHolder(el)) break;
           var r = el.getBoundingClientRect();
-          if (r.width < window.innerWidth * 0.8) break;
-          if (r.height > window.innerHeight * 0.8) break;
-          var hasLogin = false, hasCreate = false;
-          var inner = el.querySelectorAll('a, button, [role="button"]');
-          for (var k = 0; k < inner.length; k++) {
-            var it = (inner[k].textContent || '').trim();
-            if (it === 'Log In' || it === 'Log in') hasLogin = true;
-            if (it === 'Create new account' || it === 'Create account') hasCreate = true;
+          if (r.height > window.innerHeight * 0.85) break;
+          if (r.width >= window.innerWidth * 0.8) {
+            var hasLogin = false, hasCreate = false;
+            var inner = el.querySelectorAll('a, button, [role="button"]');
+            for (var k = 0; k < inner.length; k++) {
+              var it = (inner[k].textContent || '').trim();
+              if (it === 'Log In' || it === 'Log in') hasLogin = true;
+              if (it === 'Create new account' || it === 'Create account') hasCreate = true;
+            }
+            if (hasLogin && hasCreate) best = el;
           }
-          if (!hasLogin || !hasCreate) break;
-          best = el;
           el = el.parentElement;
         }
         if (best) {
@@ -217,6 +239,7 @@ export function buildMarketplaceGuestScript(
     } catch (e) {}
   }
   function apply() {
+    ensureStyle();
     if (S.dismissLogin) {
       if (!tryClose()) hideLoginWalls();
     }
