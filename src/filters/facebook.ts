@@ -300,14 +300,13 @@ export function buildFacebookScript(settings: FilterSettings): string {
     }
     hide(candidate);
   }
-  // Video viewer lockdown (Austin's recording, 2026-11-23): a
-  // regular video post in the feed — not just a Reel — opens
-  // Facebook's full-screen viewer when tapped, and the viewer then
-  // serves an endless swipe-through stream of other videos. Same
-  // treatment as Instagram: the tap that would open the viewer does
-  // nothing. The post itself stays in the feed (poster, text, Like /
-  // Comment / Share all work); it just can't be opened into the
-  // viewer. Marketplace is never touched (he sells there).
+  // Videos vs the viewer (Austin's call, 2026-11-23): the first
+  // cut (5738c8c) blocked feed videos from opening at all, because
+  // the full-screen viewer serves an endless swipe-through stream.
+  // He asked for the middle ground instead: videos open and play
+  // like before, but the swipe is disabled, so the viewer stays on
+  // the one video that was tapped. Reels stay fully blocked —
+  // a reel has no single-video mode; its viewer IS the stream.
   if (S.blockReels) {
     document.addEventListener('click', function (e) {
       try {
@@ -316,59 +315,70 @@ export function buildFacebookScript(settings: FilterSettings): string {
         if (!t || t.nodeType !== 1) return;
         // Branded entries already swallow their own taps.
         if (t.closest && t.closest('[data-rf-branded]')) return;
-        var swallow = function () {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-        };
         var a = t.closest ? t.closest('a') : null;
         if (a) {
           var href = a.getAttribute('href') || '';
-          // Viewer links: a specific reel/video, or Watch with a
-          // video id. The bare Watch tab (no video id) still opens.
-          if (href.indexOf('/reel/') >= 0 ||
-              href.indexOf('/videos/') >= 0 ||
-              href.indexOf('video.php') >= 0 ||
-              (href.indexOf('/watch') >= 0 && href.indexOf('v=') >= 0)) {
-            swallow();
-            return;
+          if (href.indexOf('/reel/') >= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
           }
-        }
-        // Tap on the video itself or its frame: Facebook often uses
-        // a plain clickable div around the <video>, no anchor. If
-        // the tap lands in a container barely bigger than the video
-        // it holds, it's the video's frame — swallow it. The action
-        // bar sits outside that frame, so it stays tappable.
-        var el = t, depth = 0;
-        while (el && depth < 6) {
-          if (el.tagName === 'VIDEO') { swallow(); return; }
-          if (el.querySelector) {
-            var vid = el.querySelector('video');
-            if (vid) {
-              var vr = vid.getBoundingClientRect();
-              var er = el.getBoundingClientRect();
-              if (vr.width > 0 && er.width <= vr.width * 1.7 &&
-                  er.height <= vr.height * 1.7) {
-                swallow();
-                return;
-              }
-            }
-          }
-          el = el.parentElement; depth++;
         }
       } catch (err) {}
     }, true);
+    // Swipe disabling: in the full-screen viewer the video fills
+    // most of the viewport, and a vertical drag on it is the
+    // swipe-to-next gesture. Swallow vertical touchmoves that
+    // land on that big video (capture phase, before Facebook's
+    // own handlers see them). Everything else is untouched:
+    // taps (play/pause), horizontal drags (the seek bar), feed
+    // scrolling, and scrolling comments — the gate is the video
+    // being viewer-sized, which a feed video never is.
+    var swipeStart = null;
+    document.addEventListener('touchstart', function (e) {
+      try {
+        if (e.touches && e.touches.length === 1) {
+          swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else swipeStart = null;
+      } catch (err) { swipeStart = null; }
+    }, { capture: true, passive: true });
+    document.addEventListener('touchmove', function (e) {
+      try {
+        if (!swipeStart) return;
+        if (location.pathname.indexOf('/marketplace') === 0) return;
+        var t = e.target;
+        if (!t || t.nodeType !== 1) return;
+        // The video under this touch, if any: the target is the
+        // video, wraps it, or sits inside its frame.
+        var vid = null;
+        if (t.tagName === 'VIDEO') vid = t;
+        else if (t.querySelector) vid = t.querySelector('video');
+        if (!vid && t.closest) {
+          var wrap = t.closest('div');
+          if (wrap && wrap.querySelector) vid = wrap.querySelector('video');
+        }
+        if (!vid) return;
+        var vr = vid.getBoundingClientRect();
+        // Viewer-sized only: at least 90% of the width and 55%
+        // of the height of the viewport.
+        if (vr.width < window.innerWidth * 0.9 ||
+            vr.height < window.innerHeight * 0.55) return;
+        var dx = e.touches[0].clientX - swipeStart.x;
+        var dy = e.touches[0].clientY - swipeStart.y;
+        if (Math.abs(dy) < 12 || Math.abs(dy) <= Math.abs(dx)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      } catch (err) {}
+    }, { capture: true, passive: false });
   }
   function apply() {
     try {
-      // Viewer routes reached any other way (notifications, shared
-      // links, back/forward) go home too: a reel, a Watch URL with
-      // a video id, or the old video.php viewer. The bare Watch
-      // page itself stays.
-      if (S.blockReels && (/^\\/reel\\//.test(location.pathname) ||
-          (location.pathname.indexOf('/watch') === 0 &&
-           /[?&]v=/.test(location.search)) ||
-          location.pathname.indexOf('video.php') >= 0)) {
+      // Reel routes reached any other way (notifications, shared
+      // links, back/forward) still go home — a reel only exists
+      // as the swipe stream. Watch/video routes now stay: they
+      // open the single video, with the swipe disabled above.
+      if (S.blockReels && /^\\/reel\\//.test(location.pathname)) {
         location.replace('/');
         return;
       }
