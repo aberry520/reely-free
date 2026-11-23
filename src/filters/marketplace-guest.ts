@@ -437,6 +437,54 @@ export function buildMarketplaceGuestScript(
   // it was meant to release; the html/body stylesheet unlock stays,
   // and this helper does not come back without evidence the lock
   // actually lands on an inner container.
+  // Post-wall freedom pass (his report, 2026-11-23 11:10: the popup
+  // flashes and disappears — good — but the page is frozen after).
+  // When Facebook opens its dialog it also sedates the page behind
+  // it: the app behind a modal commonly gets some mix of an overflow
+  // lock on the scroll container, pointer-events switched off,
+  // touch-action none, or an inert attribute. Facebook restores all
+  // of that when IT closes the dialog — but we hid the dialog out
+  // from under it, so the restore never runs and the page stays
+  // sedated even though nothing is visibly wrong. The surgical
+  // unlock in unlockScroll() only covers html/body; this pass walks
+  // the ancestor chain of the listings themselves — the exact
+  // elements a swipe has to travel through — and undoes any sedation
+  // found there. It runs only when a wall has actually been hidden,
+  // and it only ever REMOVES a disabling state (never restructures
+  // layout on a healthy page), which is what separates it from the
+  // blanket container forcing that backfired earlier.
+  function releasePage() {
+    try {
+      if (!document.querySelector('[data-rf-hidden]')) return;
+      var link = document.querySelector('a[href*="/marketplace/item/"]');
+      if (!link) return;
+      var el = link;
+      var guard = 0;
+      while (el && el !== document.documentElement && guard < 40) {
+        guard++;
+        try {
+          if (el.hasAttribute && el.hasAttribute('inert')) {
+            el.removeAttribute('inert');
+          }
+          var cs = window.getComputedStyle(el);
+          if (cs.pointerEvents === 'none') {
+            el.style.setProperty('pointer-events', 'auto', 'important');
+          }
+          if (cs.touchAction === 'none') {
+            el.style.setProperty('touch-action', 'auto', 'important');
+          }
+          if (cs.overflowY === 'hidden' &&
+              el.scrollHeight > el.clientHeight + 24) {
+            el.style.setProperty('overflow-y', 'auto', 'important');
+          }
+          if (cs.position === 'fixed' && el === document.body) {
+            el.style.setProperty('position', 'static', 'important');
+          }
+        } catch (e) {}
+        el = el.parentElement;
+      }
+    } catch (e) {}
+  }
   function apply() {
     ensureStyle();
     if (S.dismissLogin) {
@@ -451,6 +499,7 @@ export function buildMarketplaceGuestScript(
       probeBlockers();
     }
     unlockScroll();
+    releasePage();
   }
   // Light pass for use mid-scroll: the wall hunt and the scroll
   // unlock only. The full apply() runs getComputedStyle sweeps over
@@ -462,6 +511,7 @@ export function buildMarketplaceGuestScript(
       if (!tryClose()) hideLoginWalls();
     }
     unlockScroll();
+    releasePage();
   }
   apply();
   var pending = false;
