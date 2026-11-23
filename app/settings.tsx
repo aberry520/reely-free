@@ -128,6 +128,8 @@ export default function SettingsScreen() {
   const appsCollapsed = isCollapsed('apps');
   const showFb =
     !appsCollapsed && settings.featureFacebook && !isCollapsed('facebook');
+  const showIg =
+    !appsCollapsed && settings.featureInstagram && !isCollapsed('instagram');
   const showYt =
     !appsCollapsed && settings.featureYouTube && !isCollapsed('youtube');
   const showGuest =
@@ -185,6 +187,49 @@ export default function SettingsScreen() {
                 detail="Like the app: the top bar scrolls away going down and comes back as soon as you scroll up, instead of only at the very top."
                 value={settings.fbStickyHeader}
                 onChange={set('fbStickyHeader')}
+              />
+            </>
+          )}
+
+          <FeatureHeader
+            title="Instagram"
+            detail="Off = the Instagram door leaves the home screen."
+            value={settings.featureInstagram}
+            onChange={set('featureInstagram')}
+            collapsed={isCollapsed('instagram')}
+            onToggleCollapse={() => toggleCollapse('instagram')}
+          />
+          {showIg && (
+            <>
+              <ToggleRow
+                label="Block Reels"
+                detail="Hides the Reels entry and feed posts that are reels, and the Reels feed itself sends you home. A single reel someone links you to directly still opens."
+                value={settings.igBlockReels}
+                onChange={set('igBlockReels')}
+              />
+              <ToggleRow
+                label="Hide Explore"
+                detail="Hides the Explore entry, and the Explore page sends you home instead."
+                value={settings.igHideExplore}
+                onChange={set('igHideExplore')}
+              />
+              <ToggleRow
+                label="Hide suggested"
+                detail="Hides 'Suggested for you' posts in the feed and suggested-account sections elsewhere."
+                value={settings.igHideSuggested}
+                onChange={set('igHideSuggested')}
+              />
+              <ToggleRow
+                label="Hide sponsored posts"
+                detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
+                value={settings.igHideSponsored}
+                onChange={set('igHideSponsored')}
+              />
+              <ToggleRow
+                label="Block app banners"
+                detail="Hides 'Open app' bars and similar get-the-app banners."
+                value={settings.igBlockAppPromo}
+                onChange={set('igBlockAppPromo')}
               />
             </>
           )}

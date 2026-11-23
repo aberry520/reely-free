@@ -23,6 +23,7 @@ export interface FilterSettings {
   // home are governed by their own toggles below.
   featureYouTube: boolean;
   featureFacebook: boolean;
+  featureInstagram: boolean;
   featureGuestMarketplace: boolean;
   // YouTube
   ytBlockShorts: boolean;
@@ -36,6 +37,11 @@ export interface FilterSettings {
   fbHideSponsored: boolean;
   fbBlockAppPromo: boolean;
   fbStickyHeader: boolean;
+  igBlockReels: boolean;
+  igHideExplore: boolean;
+  igHideSuggested: boolean;
+  igHideSponsored: boolean;
+  igBlockAppPromo: boolean;
   // Guest Marketplace (experimental desktop door). No location settings
   // on purpose (his decision, 2026-11-23): typed city/radius fields and
   // then a "use my location" toggle both failed to move Facebook, which
@@ -56,6 +62,7 @@ export interface FilterSettings {
 export const DEFAULT_SETTINGS: FilterSettings = {
   featureYouTube: true,
   featureFacebook: true,
+  featureInstagram: true,
   featureGuestMarketplace: true,
   ytBlockShorts: true,
   ytLandOnSubs: true,
@@ -67,6 +74,11 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   fbHideSponsored: true,
   fbBlockAppPromo: true,
   fbStickyHeader: true,
+  igBlockReels: true,
+  igHideExplore: true,
+  igHideSuggested: true,
+  igHideSponsored: true,
+  igBlockAppPromo: true,
   mpGuestDismissLogin: true,
   mpGuestBlockLoginBar: true,
   mpGuestNativeShare: true,

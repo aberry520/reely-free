@@ -32,6 +32,14 @@ function AppStack() {
           }}
         />
         <Stack.Screen
+          name="instagram"
+          options={{
+            headerShown: false,
+            gestureEnabled: leftEdge,
+            animation: 'slide_from_left',
+          }}
+        />
+        <Stack.Screen
           name="marketplace"
           options={{
             headerShown: false,

@@ -49,7 +49,7 @@ interface SiteBrowserProps {
   nativeShare?: boolean;
 }
 
-export type AppId = 'facebook' | 'youtube' | 'marketplace';
+export type AppId = 'facebook' | 'instagram' | 'youtube' | 'marketplace';
 
 // The doors the home button can hot-swap between (Austin's ask,
 // 2026-11-23): long-pressing the floating button lists the enabled
@@ -58,7 +58,7 @@ export type AppId = 'facebook' | 'youtube' | 'marketplace';
 const APPS: {
   id: AppId;
   label: string;
-  route: '/facebook' | '/youtube' | '/marketplace';
+  route: '/facebook' | '/instagram' | '/youtube' | '/marketplace';
   color: string;
   enabled: (s: FilterSettings) => boolean;
 }[] = [
@@ -68,6 +68,13 @@ const APPS: {
     route: '/facebook',
     color: '#1877f2',
     enabled: (s) => s.featureFacebook,
+  },
+  {
+    id: 'instagram',
+    label: 'Instagram',
+    route: '/instagram',
+    color: '#d62976',
+    enabled: (s) => s.featureInstagram,
   },
   {
     id: 'youtube',
@@ -380,6 +387,8 @@ export default function SiteBrowser({
     const icon =
       a.id === 'facebook' ? (
         <FontAwesome5 name="facebook-f" size={20} color="#fff" />
+      ) : a.id === 'instagram' ? (
+        <FontAwesome5 name="instagram" size={20} color="#fff" />
       ) : a.id === 'youtube' ? (
         <FontAwesome5 name="youtube" size={20} color="#fff" />
       ) : (

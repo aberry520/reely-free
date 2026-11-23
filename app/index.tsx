@@ -5,8 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
 
-// Home: three doors. Facebook and YouTube, minus the parts designed to
-// keep him scrolling, plus an experimental guest Marketplace door that
+// Home: the doors. Facebook, Instagram and YouTube, minus the parts
+// designed to keep him scrolling, plus an experimental guest Marketplace door that
 // browses without an account. Marketplace also stays in Facebook — he
 // sells there. Messenger stays in its own app, by his choice. Colors
 // follow the phone's light/dark setting.
@@ -24,6 +24,7 @@ export default function HomeScreen() {
   const { settings } = useSettings();
   const anyDoor =
     settings.featureFacebook ||
+    settings.featureInstagram ||
     settings.featureYouTube ||
     settings.featureGuestMarketplace;
 
@@ -37,7 +38,7 @@ export default function HomeScreen() {
     >
       <Text style={[styles.title, { color: theme.text }]}>Reely Free</Text>
       <Text style={[styles.subtitle, { color: theme.muted }]}>
-        Facebook and YouTube, without the hooks.
+        Your social apps, without the hooks.
       </Text>
 
       {settings.featureFacebook && (
@@ -49,6 +50,19 @@ export default function HomeScreen() {
           <Text style={styles.cardDetail}>
             No Reels, no suggested posts, no sponsored posts. Feed, groups and
             Marketplace stay.
+          </Text>
+        </Pressable>
+      )}
+
+      {settings.featureInstagram && (
+        <Pressable
+          style={[styles.card, styles.instagramCard]}
+          onPress={() => router.push('/instagram')}
+        >
+          <Text style={styles.cardTitle}>Instagram</Text>
+          <Text style={styles.cardDetail}>
+            No Reels, no Explore, no suggested posts or accounts. Your feed,
+            profiles, messages and search stay.
           </Text>
         </Pressable>
       )}
@@ -107,6 +121,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   facebookCard: { backgroundColor: '#1877f2' },
+  instagramCard: { backgroundColor: '#c13584' },
   youtubeCard: { backgroundColor: '#c4302b' },
   marketplaceCard: { backgroundColor: '#0f766e' },
   cardTitle: { fontSize: 22, fontWeight: '700', color: '#fff' },
