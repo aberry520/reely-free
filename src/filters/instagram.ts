@@ -1,42 +1,36 @@
 import type { FilterSettings } from '../lib/settings';
 
 // Builds the JavaScript injected into instagram.com before page content
-// loads. Same approach as the Facebook filter: stable hooks (URLs,
-// <article> post units, visible label text) instead of class names,
-// which Meta shuffles constantly, and a MutationObserver to re-apply
-// as the feed lazy-loads. Everything is wrapped defensively: a filter
-// bug must never break the page itself.
+// loads. Stable hooks only (URLs, visible label text) instead of class
+// names, which Meta shuffles constantly. Everything is wrapped
+// defensively: a filter bug must never break the page itself.
 //
-// v2 fix (his first-test recording, 2026-11-23): after ~a minute of
-// scrolling the feed glitched into a long black void, then recovered
-// further down. Cause: Instagram's mobile feed RECYCLES its post
-// elements — the same <article> node is refilled with new posts as
-// you scroll — and v1's hiding was sticky: once a node was marked
-// hidden it stayed hidden forever, so recycled nodes carried the
-// hide into whatever post loaded next, blanking more and more of the
-// feed the longer he scrolled. v2 re-evaluates every post on every
-// pass and UN-hides a node whose current content no longer matches
-// any rule — hiding follows the content, never the node. The same
-// recording exposed two label misses, also fixed: ads here are
-// labelled "Ad" (not only "Sponsored"), and the suggestions header
-// reads "Suggestions for you" (with an s).
-//
-// Scope notes (v1, Austin's pick 2026-11-23 — Instagram added first of
-// the candidate apps):
-// - "Block Reels" kills the Reels FEED (the /reels/ surface redirects
-//   home, its nav entry is hidden, and feed posts that are reels are
-//   hidden). A single reel permalink (/reel/<id>/) someone deliberately
-//   opens is left alone — same line the Facebook filter draws.
-// - Explore: the nav entry is hidden and /explore redirects home.
-// - Direct messages, profiles, search and stories are untouched.
+// v3 — show everything, block the rabbit holes (Austin's direction,
+// 2026-11-23). v1 hid feed posts (reels / suggested / sponsored) and
+// the feed broke: after ~a minute of scrolling it glitched into a
+// long black void. v2's re-evaluate-and-unhide fix did NOT cure it —
+// his retest showed the same void. Whatever the precise mechanism
+// (recycled post nodes and/or the feed's own layout bookkeeping),
+// display:none on feed posts fights Instagram's scroller and loses.
+// So v3 hides NOTHING in the feed: reels and suggested posts show
+// like everything else. Instead, the endless-scroll surfaces are
+// closed off:
+// - The Reels feed and Explore redirect home; their nav entries are
+//   hidden (unchanged from v1 — that part never caused trouble).
+// - Tapping a reel anywhere (feed, profile, search) is intercepted
+//   and does nothing, so you can't fall into the swipe-through reel
+//   viewer. Direct /reel/<id>/ URLs redirect home too.
+// - Tapping into a suggested post is intercepted the same way.
+// Likes, comments, profiles, DMs, search and stories are untouched,
+// and sponsored posts simply show (the sponsored hide toggle is
+// gone — hiding them used the same feed-hiding that broke scrolling).
 export function buildInstagramScript(settings: FilterSettings): string {
   // Feature master off: the door is plain Instagram, no injection.
   if (!settings.featureInstagram) return 'true;';
   const s = JSON.stringify({
     blockReels: settings.igBlockReels,
     hideExplore: settings.igHideExplore,
-    hideSuggested: settings.igHideSuggested,
-    hideSponsored: settings.igHideSponsored,
+    blockSuggested: settings.igHideSuggested,
     blockAppPromo: settings.igBlockAppPromo,
   });
 
@@ -48,43 +42,6 @@ export function buildInstagramScript(settings: FilterSettings): string {
       el.setAttribute('data-rf-hidden', '1');
       el.style.setProperty('display', 'none', 'important');
     }
-  }
-  function unhide(el) {
-    if (el && el.getAttribute('data-rf-hidden')) {
-      el.removeAttribute('data-rf-hidden');
-      el.style.removeProperty('display');
-    }
-  }
-  // An ad carries its label as a small standalone element under the
-  // account name: "Ad" or "Sponsored". Leaf elements only, exact text,
-  // so a caption merely containing the words never matches.
-  function hasAdLabel(post) {
-    var leaves = post.querySelectorAll('span, div');
-    for (var i = 0; i < leaves.length; i++) {
-      var leaf = leaves[i];
-      if (leaf.children && leaf.children.length > 0) continue;
-      var t = (leaf.textContent || '').trim();
-      if (t === 'Ad' || t === 'Sponsored') return true;
-    }
-    return false;
-  }
-  // Hide the section a label belongs to (e.g. a "Suggested for you"
-  // header): climb to the outermost ancestor that still looks like a
-  // self-contained section — bounded height, reasonably wide.
-  function hideSection(node) {
-    var best = node, el = node, depth = 0;
-    while (el && depth < 6) {
-      el = el.parentElement; depth++;
-      if (!el) break;
-      var r = el.getBoundingClientRect();
-      if (r.height > 0 && r.height <= window.innerHeight * 0.7 &&
-          r.width >= window.innerWidth * 0.6) {
-        best = el;
-      } else if (r.height > window.innerHeight * 0.7) {
-        break;
-      }
-    }
-    hide(best);
   }
   // Hide the full-width bar a get-the-app button sits in.
   function hideBar(node) {
@@ -101,10 +58,48 @@ export function buildInstagramScript(settings: FilterSettings): string {
     }
     hide(candidate);
   }
+  // The click block: capture-phase, so a blocked tap never reaches
+  // Instagram's own handlers. Installed once.
+  try {
+    document.addEventListener('click', function (ev) {
+      try {
+        var t = ev.target;
+        if (!t || !t.closest) return;
+        if (S.blockReels) {
+          var reelLink = t.closest(
+            'a[href^="/reel/"], a[href^="/reels/"], ' +
+            'a[href*="instagram.com/reel/"], a[href*="instagram.com/reels/"]'
+          );
+          if (reelLink) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            return;
+          }
+        }
+        if (S.blockSuggested && t.closest('a')) {
+          var art = t.closest('article');
+          if (art) {
+            var txt = '';
+            try { txt = art.innerText || art.textContent || ''; } catch (e) {}
+            if (txt.indexOf('Suggested for you') >= 0 ||
+                txt.indexOf('Suggestions for you') >= 0) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+              return;
+            }
+          }
+        }
+      } catch (e) {}
+    }, true);
+  } catch (e) {}
   function apply() {
     try {
       var path = location.pathname;
-      if (S.blockReels && (path === '/reels' || path.indexOf('/reels/') === 0)) {
+      if (S.blockReels &&
+          (path === '/reels' || path.indexOf('/reels/') === 0 ||
+           path.indexOf('/reel/') === 0)) {
         location.replace('/');
         return;
       }
@@ -113,6 +108,8 @@ export function buildInstagramScript(settings: FilterSettings): string {
         return;
       }
       // Nav entries that lead to Reels / Explore: hide the entry.
+      // (Nav is static chrome, not feed content — hiding it never
+      // caused the scrolling problem.)
       var navSel = [];
       if (S.blockReels) navSel.push('a[href="/reels/"], a[href^="/reels/"], [aria-label="Reels"]');
       if (S.hideExplore) navSel.push('a[href="/explore/"], a[href^="/explore/"], [aria-label="Explore"]');
@@ -122,41 +119,6 @@ export function buildInstagramScript(settings: FilterSettings): string {
           var nav = navEls[i];
           var link = nav.closest ? (nav.closest('a') || nav) : nav;
           if (!link.closest || !link.closest('article')) hide(link);
-        }
-      }
-      // Feed posts. NEVER skip a marked post: Instagram recycles
-      // these nodes, so every pass re-decides from the CURRENT
-      // content and un-hides a node that no longer matches (see the
-      // v2 note at the top of this file).
-      var posts = document.querySelectorAll('article');
-      for (var j = 0; j < posts.length; j++) {
-        var post = posts[j];
-        var text = '';
-        try { text = post.innerText || post.textContent || ''; } catch (e) {}
-        var shouldHide = false;
-        if (S.blockReels && post.querySelector('a[href^="/reel/"]')) {
-          shouldHide = true;
-        } else if (S.hideSuggested &&
-            (text.indexOf('Suggested for you') >= 0 ||
-             text.indexOf('Suggestions for you') >= 0)) {
-          shouldHide = true;
-        } else if (S.hideSponsored && hasAdLabel(post)) {
-          shouldHide = true;
-        }
-        if (shouldHide) hide(post); else unhide(post);
-      }
-      // "Suggested for you" sections outside posts (account carousels,
-      // follow suggestions on profiles): hide the whole section.
-      if (S.hideSuggested) {
-        var labels = document.querySelectorAll('div, span, h2, h3, h4');
-        for (var k = 0; k < labels.length; k++) {
-          var lab = labels[k];
-          if (lab.getAttribute('data-rf-hidden')) continue;
-          var labText = (lab.textContent || '').trim();
-          if (labText !== 'Suggested for you' && labText !== 'Suggestions for you') continue;
-          if (lab.querySelector && lab.querySelector('div, span')) continue;
-          if (lab.closest && lab.closest('article')) continue;
-          hideSection(lab);
         }
       }
       // Get-the-app banners and bars, same labels Meta uses everywhere.

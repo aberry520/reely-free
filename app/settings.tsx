@@ -202,8 +202,8 @@ export default function SettingsScreen() {
           {showIg && (
             <>
               <ToggleRow
-                label="Block Reels"
-                detail="Hides the Reels entry and feed posts that are reels, and the Reels feed itself sends you home. A single reel someone links you to directly still opens."
+                label="Block opening Reels"
+                detail="Reels still show in the feed, but tapping one does nothing — you can't fall into the swipe-through Reels viewer. The Reels entry is hidden and the Reels feed sends you home."
                 value={settings.igBlockReels}
                 onChange={set('igBlockReels')}
               />
@@ -214,16 +214,10 @@ export default function SettingsScreen() {
                 onChange={set('igHideExplore')}
               />
               <ToggleRow
-                label="Hide suggested"
-                detail="Hides 'Suggested for you' posts in the feed and suggested-account sections elsewhere."
+                label="Block opening suggested posts"
+                detail="Suggested posts still show in the feed, but tapping into one does nothing. (Hiding feed posts outright broke Instagram's scrolling, so the feed is left exactly as it comes.)"
                 value={settings.igHideSuggested}
                 onChange={set('igHideSuggested')}
-              />
-              <ToggleRow
-                label="Hide sponsored posts"
-                detail="Hides posts labelled Ad or Sponsored. Best effort — some ad formats slip through."
-                value={settings.igHideSponsored}
-                onChange={set('igHideSponsored')}
               />
               <ToggleRow
                 label="Block app banners"

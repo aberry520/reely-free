@@ -39,8 +39,10 @@ export interface FilterSettings {
   fbStickyHeader: boolean;
   igBlockReels: boolean;
   igHideExplore: boolean;
+  // Despite the key name (kept from v1 so his saved value carries
+  // over), since v3 this BLOCKS OPENING suggested posts — the feed
+  // itself is never hidden any more (see filters/instagram.ts).
   igHideSuggested: boolean;
-  igHideSponsored: boolean;
   igBlockAppPromo: boolean;
   // Guest Marketplace (experimental desktop door). No location settings
   // on purpose (his decision, 2026-11-23): typed city/radius fields and
@@ -77,7 +79,6 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   igBlockReels: true,
   igHideExplore: true,
   igHideSuggested: true,
-  igHideSponsored: true,
   igBlockAppPromo: true,
   mpGuestDismissLogin: true,
   mpGuestBlockLoginBar: true,
