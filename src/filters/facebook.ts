@@ -1,5 +1,5 @@
 import type { FilterSettings } from '../lib/settings';
-import { LOGO_MARK_DATA_URI } from './logo-data';
+import { LOGO_FULL_DATA_URI, LOGO_MARK_DATA_URI } from './logo-data';
 
 // Builds the JavaScript injected into facebook.com before page content
 // loads. Rules target stable hooks (URLs, role="article", visible label
@@ -18,11 +18,13 @@ export function buildFacebookScript(settings: FilterSettings): string {
     stickyHeader: settings.fbStickyHeader,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
+  const logo = JSON.stringify(LOGO_FULL_DATA_URI);
 
   return `
 (function () {
   var S = ${s};
   var MARK = ${mark};
+  var LOGO = ${logo};
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
@@ -143,10 +145,17 @@ export function buildFacebookScript(settings: FilterSettings): string {
   // Reels SECTIONS in the feed (Austin's screenshot, 2026-11-23):
   // a unit headed "Reels" with a big reel card under it slipped
   // past the post sweep entirely (it isn't a role=article post and
-  // its card has no /reel/ link to catch). Per his rule — where
-  // something is removed, the Reely Free mark goes in its place —
-  // the whole unit is collapsed to a slim branded placeholder bar
-  // instead of being silently hidden.
+  // its card has no /reel/ link to catch). First attempt collapsed
+  // the unit to a placeholder bar by hiding its children — but the
+  // unit-finding climb escaped the section on his phone and the
+  // hiding blanked the whole feed (his recording). His call: leave
+  // the section exactly as it is and COVER it, the way the
+  // Instagram Explore grid is covered. Nothing inside the section
+  // is hidden, moved or removed — a branded panel sits on top of
+  // it, so Facebook's feed machinery is never fought. The climb is
+  // hard-bounded (height and link count checked at every step and
+  // on the result) so it can never walk out into the feed column:
+  // an oversized "unit" is simply left alone.
   function findReelsUnit(header) {
     try {
       var hasMedia = function (root) {
@@ -155,43 +164,46 @@ export function buildFacebookScript(settings: FilterSettings): string {
            root.querySelector('a[href*="/reel/"]')));
       };
       var unit = header, depth = 0;
-      while (unit && depth < 7 && !hasMedia(unit)) {
+      while (unit && depth < 6 && !hasMedia(unit)) {
         unit = unit.parentElement; depth++;
+        if (!unit) return null;
+        var r = unit.getBoundingClientRect();
+        if (r.height > 1200) return null;
       }
       if (!unit || !hasMedia(unit)) return null;
-      // Absorb thin wrapper shells barely bigger than the unit.
-      var up = 0;
-      while (unit.parentElement && up < 2) {
-        var p = unit.parentElement;
-        var ur = unit.getBoundingClientRect();
-        var pr = p.getBoundingClientRect();
-        if (pr.height > 0 && pr.height <= ur.height * 1.35 &&
-            pr.width <= ur.width * 1.15) { unit = p; up++; }
-        else break;
-      }
+      var ur = unit.getBoundingClientRect();
+      if (ur.height < 80 || ur.height > 1200) return null;
+      if (unit.querySelectorAll &&
+          unit.querySelectorAll('a').length > 24) return null;
       return unit;
     } catch (e) { return null; }
   }
-  function brandSection(unit) {
+  function coverReelsUnit(unit) {
     try {
-      if (!unit || unit.getAttribute('data-rf-section')) return;
-      unit.setAttribute('data-rf-section', '1');
-      var bar = document.createElement('div');
-      bar.setAttribute('data-rf-placeholder', '1');
-      bar.style.cssText =
-        'display:flex;align-items:center;gap:8px;padding:10px 12px;';
+      if (!unit) return;
+      if (unit.querySelector('[data-rf-cover]')) return;
+      unit.setAttribute('data-rf-covered', '1');
+      try {
+        if (window.getComputedStyle(unit).position === 'static') {
+          unit.style.setProperty('position', 'relative');
+        }
+      } catch (e) {}
+      var cover = document.createElement('div');
+      cover.setAttribute('data-rf-cover', '1');
+      var bg = '';
+      try { bg = window.getComputedStyle(document.body).backgroundColor; } catch (e) {}
+      if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') bg = '#ffffff';
+      cover.style.cssText =
+        'position:absolute;left:0;top:0;right:0;bottom:0;z-index:20;' +
+        'display:flex;align-items:center;justify-content:center;';
+      cover.style.backgroundColor = bg;
       var img = document.createElement('img');
-      img.src = MARK;
+      img.src = LOGO;
       img.alt = 'Reely Free';
       img.style.cssText =
-        'width:24px;height:24px;border-radius:6px;display:block;' +
-        'object-fit:cover;flex:none;';
-      var label = document.createElement('span');
-      label.textContent = 'Reely Free';
-      label.style.cssText = 'font-size:15px;font-weight:600;';
-      bar.appendChild(img);
-      bar.appendChild(label);
-      unit.appendChild(bar);
+        'width:200px;max-width:70%;display:block;border-radius:18px;';
+      cover.appendChild(img);
+      unit.appendChild(cover);
     } catch (e) {}
   }
   // Walk up from a link to a plausible card container and hide that.
@@ -344,8 +356,9 @@ export function buildFacebookScript(settings: FilterSettings): string {
           }
           brandIcon(entry || cand2);
         }
-        // Reels sections: find the "Reels" header, collapse its
-        // whole unit to a branded placeholder bar.
+        // Reels sections: find the "Reels" header and cover its
+        // unit with the branded panel. The section itself is left
+        // completely untouched underneath.
         var heads = document.querySelectorAll(
           'div, span, h2, h3, h4, [role="heading"]');
         for (var hh = 0; hh < heads.length; hh++) {
@@ -353,23 +366,11 @@ export function buildFacebookScript(settings: FilterSettings): string {
           if (hd.children && hd.children.length > 1) continue;
           var ht = (hd.textContent || '').trim();
           if (ht !== 'Reels' && ht !== 'Reels and short videos') continue;
-          if (hd.closest && hd.closest('[data-rf-section]')) continue;
+          if (hd.closest && hd.closest('[data-rf-covered]')) continue;
           var hr2 = hd.getBoundingClientRect();
           if (hr2.height > 48) continue;
           var unit2 = findReelsUnit(hd);
-          if (unit2) brandSection(unit2);
-        }
-        // Keep flagged sections collapsed to their placeholder —
-        // if Facebook re-renders cards into the unit, they are
-        // hidden again on the next pass.
-        var flagged = document.querySelectorAll('[data-rf-section]');
-        for (var fs = 0; fs < flagged.length; fs++) {
-          var kids = flagged[fs].children;
-          for (var fk = 0; fk < kids.length; fk++) {
-            if (!kids[fk].getAttribute('data-rf-placeholder')) {
-              kids[fk].style.setProperty('display', 'none', 'important');
-            }
-          }
+          if (unit2) coverReelsUnit(unit2);
         }
       }
       var posts = document.querySelectorAll('[role="article"]');
@@ -378,10 +379,10 @@ export function buildFacebookScript(settings: FilterSettings): string {
         if (post.getAttribute('data-rf-hidden')) continue;
         var text = '';
         try { text = post.innerText || post.textContent || ''; } catch (e) {}
-        // A post wrapping a branded Reels section keeps the
-        // placeholder — don't hide the whole post out from under it.
+        // A post wrapping a covered Reels section keeps the
+        // cover — don't hide the whole post out from under it.
         var hasSection = !!(post.querySelector &&
-          post.querySelector('[data-rf-section]'));
+          post.querySelector('[data-rf-covered]'));
         if (S.blockReels && !hasSection && post.querySelector('a[href*="/reel/"]')) {
           hide(post); continue;
         }
