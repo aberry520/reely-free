@@ -40,15 +40,21 @@ export function buildMarketplaceGuestScript(
       if (document.getElementById('rf-guest-style')) return;
       var st = document.createElement('style');
       st.id = 'rf-guest-style';
+      // ONLY the marker rule lives here now. An earlier version also
+      // forced 'html,body{overflow:auto !important;position:static
+      // !important;...}' permanently to beat the modal's scroll lock —
+      // and the bisect proved that override was poison: with both
+      // toggles off (no stylesheet) he scrolled ~20 listings to the
+      // wall, but with the filter on, scrolling silently died at the
+      // end of the first batch (~12) every time, in every recording
+      // since the override was added. Forcing overflow/position on
+      // html+body from page load breaks Facebook's own scroll setup
+      // (it never sees "near the bottom", so batch two never loads).
+      // The lock is now beaten surgically in unlockScroll() instead:
+      // only at the moment a wall has actually been hidden, and only
+      // on the element actually locked.
       st.textContent =
-        '[data-rf-hidden]{display:none !important;}' +
-        // The modal's other half: Facebook locks page scroll while a
-        // dialog is up (overflow hidden / fixed body), and the lock
-        // outlived the hidden dialog — grey gone, page still frozen
-        // (his report, 2026-11-23 10:24). Removing the inline lock in
-        // JS races Facebook re-adding it; a stylesheet !important rule
-        // wins permanently, for as long as this door is open.
-        'html,body{overflow:auto !important;position:static !important;touch-action:auto !important;}';
+        '[data-rf-hidden]{display:none !important;}';
       (document.head || document.documentElement).appendChild(st);
     } catch (e) {}
   }
@@ -67,6 +73,30 @@ export function buildMarketplaceGuestScript(
         if (!el) continue;
         if (el.style.overflow === 'hidden') el.style.removeProperty('overflow');
         if (el.style.position === 'fixed') el.style.removeProperty('position');
+      }
+      // Surgical lock release: only when we have actually hidden a
+      // wall (a marked element exists) AND html/body are still locked
+      // (computed overflow hidden — e.g. the lock came from a class,
+      // which the inline cleanup above cannot remove). Then, and only
+      // then, pin overflow auto inline. On a healthy page — including
+      // while Facebook's own dialogs like Change location are open —
+      // nothing is touched, so Facebook's scroll setup stays exactly
+      // as it built it.
+      if (document.querySelector('[data-rf-hidden]')) {
+        for (var j = 0; j < els.length; j++) {
+          var el2 = els[j];
+          if (!el2) continue;
+          var oy = '';
+          try { oy = window.getComputedStyle(el2).overflowY; } catch (e) {}
+          if (oy === 'hidden') {
+            el2.style.setProperty('overflow-y', 'auto', 'important');
+          }
+          var pos = '';
+          try { pos = window.getComputedStyle(el2).position; } catch (e) {}
+          if (pos === 'fixed' && el2 === document.body) {
+            el2.style.setProperty('position', 'static', 'important');
+          }
+        }
       }
     } catch (e) {}
   }
@@ -443,6 +473,19 @@ export function buildMarketplaceGuestScript(
       }
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
+    // A re-applied scroll lock is an attribute change (style/class on
+    // html or body), which the childList observer above cannot see —
+    // watch those two elements' attributes too, same throttle.
+    var attrObs = new MutationObserver(function () {
+      if (!pending) {
+        pending = true;
+        setTimeout(function () { pending = false; apply(); }, 350);
+      }
+    });
+    attrObs.observe(document.documentElement, { attributes: true });
+    if (document.body) {
+      attrObs.observe(document.body, { attributes: true });
+    }
   } catch (e) {}
   // The scroll-depth wall fires WHILE scrolling, and attribute-only
   // changes (a lock class landing on the scroller) do not trip the
