@@ -188,14 +188,18 @@ export function buildMarketplaceAccountScript(
   // header block continues into the page's own title row below
   // the icons. There are no anchors in it at all (sig=0), which
   // is why three rounds of link/shape finders missed. The cover
-  // spans the TABS' union rect (the icon row only), so the
-  // title row underneath stays visible and usable.
+  // is pinned to the viewport top at the tabs' row height (the
+  // icon row only, ~50px), so the title row underneath stays
+  // visible and usable.
   function findTabBar() {
     var lists = document.querySelectorAll('[role="tablist"]');
     for (var i = 0; i < lists.length; i++) {
       var list = lists[i];
       var lr = list.getBoundingClientRect();
-      if (lr.top < -5 || lr.top > 80) continue;
+      // No lower bound on top: the nav can scroll above the
+      // viewport fold, and the cover is pinned anyway (below).
+      // Anything below the fold is not the nav.
+      if (lr.top > 80) continue;
       if (lr.width < window.innerWidth * 0.9) continue;
       var tabs = list.querySelectorAll('[role="tab"]');
       if (tabs.length < 5) continue;
@@ -258,6 +262,9 @@ export function buildMarketplaceAccountScript(
     };
   }
   var cover = null;
+  // Height of the icon row the last time it was measurable;
+  // the cover keeps this height while pinned.
+  var pinnedH = 50;
   function ensureCover() {
     if (cover && cover.isConnected) return cover;
     var host = document.body || document.documentElement;
@@ -294,10 +301,7 @@ export function buildMarketplaceAccountScript(
         return;
       }
       var r = barRect(bar);
-      if (r.bottom <= 0 || r.top > 140 || r.height < 24) {
-        if (cover) cover.style.display = 'none';
-        return;
-      }
+      if (r.height >= 24 && r.height <= 90) pinnedH = r.height;
       var c = ensureCover();
       if (!c) return;
       var bg = '';
@@ -315,10 +319,15 @@ export function buildMarketplaceAccountScript(
       c.style.backgroundColor = bg;
       c.style.color = fg || '#111111';
       if (ff) c.style.fontFamily = ff;
-      c.style.left = r.left + 'px';
-      c.style.top = r.top + 'px';
-      c.style.width = r.width + 'px';
-      c.style.height = r.height + 'px';
+      // Pinned: the strip stays at the viewport top while the
+      // door is open, instead of tracking the bar's rect — the
+      // bar scrolls off or drifts on scroll, and the strip used
+      // to vanish with it. It hides only when the nav itself is
+      // gone from the page (findTabBar returned null above).
+      c.style.left = '0px';
+      c.style.top = '0px';
+      c.style.width = window.innerWidth + 'px';
+      c.style.height = pinnedH + 'px';
       c.style.borderBottom = '1px solid rgba(128,128,128,0.35)';
       c.style.display = 'flex';
     } catch (e) {}
