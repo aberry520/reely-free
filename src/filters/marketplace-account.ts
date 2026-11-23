@@ -137,51 +137,95 @@ export function buildMarketplaceAccountScript(
     }
   }
   // The branded header cover. The tab bar is found by signature:
-  // a near-top, full-width, bar-height element grouping at least
-  // three of Facebook's top destinations (home, friends, watch,
+  // a near-top, full-width, bar-height element grouping several
+  // of Facebook's top destinations (home, friends, watch,
   // notifications, marketplace, groups, messages, menu). The
   // cover mirrors its rect exactly, so it rides with the bar
   // when Facebook slides it away and back.
-  var SIG = {
-    '/': 1, '/friends': 1, '/friends/': 1, '/watch': 1, '/watch/': 1,
-    '/notifications': 1, '/notifications/': 1, '/marketplace': 1,
-    '/marketplace/': 1, '/groups': 1, '/groups/': 1, '/messages': 1,
-    '/messages/': 1, '/menu': 1, '/menu/': 1
-  };
-  function sigPath(a) {
+  //
+  // Round 1 of this finder never fired on Austin's phone: it
+  // matched raw href strings against exact paths, but the mobile
+  // site's nav links carry absolute URLs and path variants, so
+  // nothing ever qualified. Round 2 parses every href properly,
+  // matches on the first path segment, climbs from several seed
+  // links instead of one, and falls back to a structural scan
+  // (a top strip full of tappable icons) if the signature climb
+  // finds nothing.
+  function pathOf(a) {
     var href = a.getAttribute('href') || '';
-    return href.split('?')[0].split('#')[0];
+    try {
+      return new URL(href, location.origin).pathname;
+    } catch (e) {
+      return href.split('?')[0].split('#')[0];
+    }
   }
-  function findTabBar() {
+  function isSigPath(p) {
+    if (p === '/' || p === '/home.php') return true;
+    var seg = p.split('/')[1] || '';
+    return seg === 'friends' || seg === 'watch' ||
+      seg === 'notifications' || seg === 'marketplace' ||
+      seg === 'groups' || seg === 'messages' ||
+      seg === 'messenger' || seg === 'menu' || seg === 'bookmarks';
+  }
+  function topSigLinks() {
+    var out = [];
     var links = document.querySelectorAll('a[href]');
-    var seed = null;
     for (var i = 0; i < links.length; i++) {
       var a = links[i];
       if (a.closest && a.closest('#rf-mpa-cover')) continue;
-      if (!SIG[sigPath(a)]) continue;
+      if (!isSigPath(pathOf(a))) continue;
       var r = a.getBoundingClientRect();
-      if (r.height === 0 || r.top < -10 || r.top > 160) continue;
-      seed = a;
-      break;
+      if (r.height === 0 || r.top < -20 || r.top > 180) continue;
+      out.push(a);
     }
-    if (!seed) return null;
-    var el = seed, depth = 0;
-    while (el && depth < 8) {
-      var rr = el.getBoundingClientRect();
-      if (rr.width >= window.innerWidth * 0.95 &&
-          rr.height >= 30 && rr.height <= 90) {
-        var inside = el.querySelectorAll('a[href]');
-        var count = 0;
-        for (var j = 0; j < inside.length; j++) {
-          if (SIG[sigPath(inside[j])]) count++;
+    return out;
+  }
+  function findTabBar() {
+    var sigs = topSigLinks();
+    // Primary: climb from each signature link near the top to a
+    // bar-shaped ancestor holding at least three of them.
+    for (var s = 0; s < sigs.length && s < 6; s++) {
+      var el = sigs[s], depth = 0;
+      while (el && depth < 10) {
+        el = el.parentElement;
+        depth++;
+        if (!el) break;
+        var rr = el.getBoundingClientRect();
+        if (rr.height > 110) break;
+        if (rr.width >= window.innerWidth * 0.95 && rr.height >= 28) {
+          var count = 0;
+          for (var k = 0; k < sigs.length; k++) {
+            if (el.contains(sigs[k])) count++;
+          }
+          if (count >= 3) return el;
         }
-        if (count >= 3) return el;
       }
-      if (rr.height > 120) break;
-      el = el.parentElement;
-      depth++;
     }
-    return null;
+    // Fallback: a structural scan — a full-width strip in the
+    // top 100px, bar-height, holding at least four tappable
+    // controls and at least one signature link.
+    var cands = document.querySelectorAll(
+      'nav, header, [role="navigation"], [role="banner"], div');
+    var best = null, bestScore = -1;
+    for (var i = 0; i < cands.length; i++) {
+      var c = cands[i];
+      if (c.closest && c.closest('#rf-mpa-cover')) continue;
+      var cr = c.getBoundingClientRect();
+      if (cr.top < -20 || cr.top > 100) continue;
+      if (cr.width < window.innerWidth * 0.95) continue;
+      if (cr.height < 28 || cr.height > 95) continue;
+      var taps = c.querySelectorAll(
+        'a[href], button, [role="button"], [role="link"]').length;
+      if (taps < 4) continue;
+      var hasSig = false;
+      for (var m = 0; m < sigs.length; m++) {
+        if (c.contains(sigs[m])) { hasSig = true; break; }
+      }
+      if (!hasSig) continue;
+      var score = taps * 100 - cr.height;
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    return best;
   }
   var cover = null;
   function ensureCover() {
@@ -191,7 +235,7 @@ export function buildMarketplaceAccountScript(
     cover = document.createElement('div');
     cover.id = 'rf-mpa-cover';
     cover.style.cssText =
-      'position:fixed;z-index:99990;display:none;align-items:center;' +
+      'position:fixed;z-index:2147483647;display:none;align-items:center;' +
       'justify-content:center;gap:9px;box-sizing:border-box;' +
       'font-weight:800;font-size:21px;letter-spacing:0.2px;';
     var left = document.createElement('span');
