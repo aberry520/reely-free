@@ -87,9 +87,75 @@ export function buildFacebookScript(settings: FilterSettings): string {
     }
     hide(candidate);
   }
+  // Video viewer lockdown (Austin's recording, 2026-11-23): a
+  // regular video post in the feed — not just a Reel — opens
+  // Facebook's full-screen viewer when tapped, and the viewer then
+  // serves an endless swipe-through stream of other videos. Same
+  // treatment as Instagram: the tap that would open the viewer does
+  // nothing. The post itself stays in the feed (poster, text, Like /
+  // Comment / Share all work); it just can't be opened into the
+  // viewer. Marketplace is never touched (he sells there).
+  if (S.blockReels) {
+    document.addEventListener('click', function (e) {
+      try {
+        if (location.pathname.indexOf('/marketplace') === 0) return;
+        var t = e.target;
+        if (!t || t.nodeType !== 1) return;
+        // Branded entries already swallow their own taps.
+        if (t.closest && t.closest('[data-rf-branded]')) return;
+        var swallow = function () {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        };
+        var a = t.closest ? t.closest('a') : null;
+        if (a) {
+          var href = a.getAttribute('href') || '';
+          // Viewer links: a specific reel/video, or Watch with a
+          // video id. The bare Watch tab (no video id) still opens.
+          if (href.indexOf('/reel/') >= 0 ||
+              href.indexOf('/videos/') >= 0 ||
+              href.indexOf('video.php') >= 0 ||
+              (href.indexOf('/watch') >= 0 && href.indexOf('v=') >= 0)) {
+            swallow();
+            return;
+          }
+        }
+        // Tap on the video itself or its frame: Facebook often uses
+        // a plain clickable div around the <video>, no anchor. If
+        // the tap lands in a container barely bigger than the video
+        // it holds, it's the video's frame — swallow it. The action
+        // bar sits outside that frame, so it stays tappable.
+        var el = t, depth = 0;
+        while (el && depth < 6) {
+          if (el.tagName === 'VIDEO') { swallow(); return; }
+          if (el.querySelector) {
+            var vid = el.querySelector('video');
+            if (vid) {
+              var vr = vid.getBoundingClientRect();
+              var er = el.getBoundingClientRect();
+              if (vr.width > 0 && er.width <= vr.width * 1.7 &&
+                  er.height <= vr.height * 1.7) {
+                swallow();
+                return;
+              }
+            }
+          }
+          el = el.parentElement; depth++;
+        }
+      } catch (err) {}
+    }, true);
+  }
   function apply() {
     try {
-      if (S.blockReels && /^\\/reel\\//.test(location.pathname)) {
+      // Viewer routes reached any other way (notifications, shared
+      // links, back/forward) go home too: a reel, a Watch URL with
+      // a video id, or the old video.php viewer. The bare Watch
+      // page itself stays.
+      if (S.blockReels && (/^\\/reel\\//.test(location.pathname) ||
+          (location.pathname.indexOf('/watch') === 0 &&
+           /[?&]v=/.test(location.search)) ||
+          location.pathname.indexOf('video.php') >= 0)) {
         location.replace('/');
         return;
       }

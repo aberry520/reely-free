@@ -160,7 +160,7 @@ export default function SettingsScreen() {
             <>
               <ToggleRow
                 label="Block Reels"
-                detail="Hides Reels in the feed and Watch. Shortcuts that lead to them stay, with the Reely Free icon in place of the Reels icon, and do nothing when tapped."
+                detail="Hides Reels in the feed and Watch, and locks down the video viewer: tapping a video in the feed does nothing instead of opening the full-screen viewer with its endless swipe-through stream. The post itself stays — Like, Comment and Share still work. Shortcuts that lead to Reels stay, with the Reely Free icon in place of the Reels icon, and do nothing when tapped."
                 value={settings.fbBlockReels}
                 onChange={set('fbBlockReels')}
               />
