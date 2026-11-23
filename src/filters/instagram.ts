@@ -18,10 +18,11 @@ import type { FilterSettings } from '../lib/settings';
 // - The Reels feed redirects home and its nav entry is hidden
 //   (unchanged from v1 — that part never caused trouble). Explore is
 //   different (his follow-up, 2026-11-23): Search lives ON the Explore
-//   page, so the page and its nav entry stay — instead the browse
-//   grid under the search bar is hidden, leaving a working search
-//   page with no content to fall into. Search results themselves are
-//   deliberate, so they show normally.
+//   page, so the page and its nav entry stay — instead a plain
+//   "Reely Free" cover sits over the browse grid under the search
+//   bar (the grid itself is left untouched underneath), leaving a
+//   working search page with no content to fall into. Search results
+//   themselves are deliberate, so they show normally.
 // - Tapping a reel anywhere (feed, profile, search) is intercepted
 //   and does nothing, so you can't fall into the swipe-through reel
 //   viewer. Direct /reel/<id>/ URLs redirect home too.
@@ -48,45 +49,96 @@ export function buildInstagramScript(settings: FilterSettings): string {
       el.style.setProperty('display', 'none', 'important');
     }
   }
-  // Explore grid hiding: on the plain Explore page, find the browse
-  // grid (the container holding many post/reel links) and hide it —
-  // but never a container that also holds the search box, which sits
-  // at the top and must stay usable. Marked with data-rf-explore as
-  // well as the usual marker, so leaving the page can undo exactly
-  // these hides if Instagram reuses the container elsewhere (e.g.
-  // for search results).
-  function hideExploreGrid() {
+  // Explore cover (Austin's idea, 2026-11-23, after the grid-hide
+  // didn't take on his phone): don't hide or remove ANYTHING — lay a
+  // fixed cover over the grid area instead. The grid stays in the
+  // page exactly as Instagram built it (nothing for its scroller to
+  // trip over), it's just not visible and can't be tapped. The cover
+  // starts below the search bar and stops above the bottom nav, so
+  // both stay usable, and it steps aside while the search box has
+  // focus so search suggestions are never trapped under it.
+  function searchInput() {
     try {
-      var links = document.querySelectorAll(
-        'a[href^="/p/"], a[href^="/reel/"], a[href^="/reels/"]'
+      return document.querySelector(
+        'input[placeholder*="Search" i], input[type="search"], input[name="query"]'
       );
-      if (links.length < 4) return;
-      var el = links[0];
-      var best = null;
-      var depth = 0;
-      while (el && depth < 10) {
-        el = el.parentElement; depth++;
-        if (!el) break;
-        if (el.querySelector && el.querySelector('input')) break;
-        var count = el.querySelectorAll
-          ? el.querySelectorAll('a[href^="/p/"], a[href^="/reel/"], a[href^="/reels/"]').length
-          : 0;
-        if (count >= 4) best = el;
+    } catch (e) { return null; }
+  }
+  function ensureCover() {
+    try {
+      var cover = document.getElementById('rf-explore-cover');
+      if (!cover) {
+        cover = document.createElement('div');
+        cover.id = 'rf-explore-cover';
+        var title = document.createElement('div');
+        title.textContent = 'Reely Free';
+        title.style.cssText =
+          'font-size:30px;font-weight:800;letter-spacing:0.2px;';
+        var sub = document.createElement('div');
+        sub.textContent = 'Explore is off — search above still works.';
+        sub.style.cssText = 'font-size:15px;opacity:0.65;margin-top:8px;';
+        cover.appendChild(title);
+        cover.appendChild(sub);
+        cover.style.cssText =
+          'position:fixed;left:0;right:0;z-index:999;' +
+          'display:flex;flex-direction:column;align-items:center;' +
+          'justify-content:center;text-align:center;padding:24px;';
+        (document.body || document.documentElement).appendChild(cover);
       }
-      if (best && !best.getAttribute('data-rf-hidden')) {
-        best.setAttribute('data-rf-explore', '1');
-        hide(best);
+      positionCover(cover);
+      return cover;
+    } catch (e) { return null; }
+  }
+  function positionCover(cover) {
+    try {
+      if (!cover) cover = document.getElementById('rf-explore-cover');
+      if (!cover) return;
+      // Match the page's own colors so it reads as a blank page, in
+      // whichever theme the phone is using.
+      var bg = '';
+      try { bg = window.getComputedStyle(document.body).backgroundColor; } catch (e) {}
+      if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') bg = '#000';
+      cover.style.backgroundColor = bg;
+      var dark = true;
+      try {
+        var parts = bg.match(/[\\d.]+/g);
+        if (parts && parts.length >= 3) {
+          var lum = (parseFloat(parts[0]) * 299 + parseFloat(parts[1]) * 587 +
+                     parseFloat(parts[2]) * 114) / 1000;
+          dark = lum < 140;
+        }
+      } catch (e) {}
+      cover.style.color = dark ? '#fff' : '#111';
+      // Top: just under the search bar (or the top of the screen if
+      // the bar has scrolled away / can't be found).
+      var top = 0;
+      var input = searchInput();
+      if (input) {
+        var r = input.getBoundingClientRect();
+        if (r.bottom > 0) top = Math.floor(r.bottom) + 6;
       }
+      // Bottom: just above the bottom nav bar, if one is pinned
+      // there — it must stay tappable so he can leave Explore.
+      var bottom = 0;
+      var navs = document.querySelectorAll('nav, [role="navigation"]');
+      for (var i = 0; i < navs.length; i++) {
+        var nr = navs[i].getBoundingClientRect();
+        if (nr.height >= 36 && nr.height <= 90 &&
+            Math.abs(nr.bottom - window.innerHeight) <= 4) {
+          bottom = Math.max(bottom, window.innerHeight - Math.floor(nr.top));
+        }
+      }
+      cover.style.top = top + 'px';
+      cover.style.bottom = bottom + 'px';
+      // While he's actually searching, step aside entirely.
+      var searching = !!(input && document.activeElement === input);
+      cover.style.display = searching ? 'none' : 'flex';
     } catch (e) {}
   }
-  function unhideExploreGrid() {
+  function removeCover() {
     try {
-      var marked = document.querySelectorAll('[data-rf-explore]');
-      for (var i = 0; i < marked.length; i++) {
-        marked[i].removeAttribute('data-rf-explore');
-        marked[i].removeAttribute('data-rf-hidden');
-        marked[i].style.removeProperty('display');
-      }
+      var cover = document.getElementById('rf-explore-cover');
+      if (cover && cover.parentElement) cover.parentElement.removeChild(cover);
     } catch (e) {}
   }
   // Hide the full-width bar a get-the-app button sits in.
@@ -149,15 +201,14 @@ export function buildInstagramScript(settings: FilterSettings): string {
         location.replace('/');
         return;
       }
-      // Explore: the page stays (Search lives there) — only its
-      // browse grid is hidden, and only on the plain Explore page,
-      // never on search results. Anywhere else, undo an explore hide
-      // in case the container got reused.
+      // Explore: the page stays (Search lives there) — a cover sits
+      // over the browse grid, on the plain Explore page only, never
+      // on search results. Anywhere else the cover is removed.
       var onExplore = path === '/explore' || path === '/explore/';
       if (S.hideExplore && onExplore) {
-        hideExploreGrid();
+        ensureCover();
       } else {
-        unhideExploreGrid();
+        removeCover();
       }
       // Nav entries that lead to Reels: hide the entry. (Nav is
       // static chrome, not feed content — hiding it never caused
@@ -200,6 +251,19 @@ export function buildInstagramScript(settings: FilterSettings): string {
       }
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
+  // Keep the cover glued under the search bar while scrolling.
+  var coverPending = false;
+  try {
+    window.addEventListener('scroll', function () {
+      if (!coverPending) {
+        coverPending = true;
+        setTimeout(function () {
+          coverPending = false;
+          positionCover(null);
+        }, 250);
+      }
+    }, true);
   } catch (e) {}
   setInterval(apply, 2500);
   true;
