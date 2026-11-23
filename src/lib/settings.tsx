@@ -26,6 +26,12 @@ export interface FilterSettings {
   fbStickyHeader: boolean;
   // Guest Marketplace (experimental desktop door)
   mpGuestDismissLogin: boolean;
+  mpGuestBlockLoginBar: boolean;
+  // Where the guest door opens: a city name (turned into Facebook's
+  // location slug in the URL) and a radius in miles, as he asked
+  // (2026-11-23). Stored as text — the Settings fields are text inputs.
+  mpGuestLocation: string;
+  mpGuestRadiusMiles: string;
   // Ways to get back home from a site screen (Austin's picks, 2026-11-22)
   navButton: boolean;
   navBottomSwipe: boolean;
@@ -46,6 +52,11 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   fbBlockAppPromo: true,
   fbStickyHeader: true,
   mpGuestDismissLogin: true,
+  mpGuestBlockLoginBar: true,
+  // Anderson is his confirmed home turf (MAC.BID warehouse, near Iva, SC);
+  // 40 miles is Facebook's own default radius. Both are his to change.
+  mpGuestLocation: 'Anderson',
+  mpGuestRadiusMiles: '40',
   // Bottom swipe defaults OFF: iOS grabs the whole bottom edge for its own
   // home gesture, so it was inconsistent in his on-device test. The other
   // three default on.

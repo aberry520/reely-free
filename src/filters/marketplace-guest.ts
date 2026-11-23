@@ -23,12 +23,13 @@ export function buildMarketplaceGuestScript(
 ): string {
   const s = JSON.stringify({
     dismissLogin: settings.mpGuestDismissLogin,
+    blockLoginBar: settings.mpGuestBlockLoginBar,
   });
 
   return `
 (function () {
   var S = ${s};
-  if (!S.dismissLogin) { true; return; }
+  if (!S.dismissLogin && !S.blockLoginBar) { true; return; }
   function isListingHolder(el) {
     try {
       return !!(el.querySelector &&
@@ -107,8 +108,58 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // The bottom login prompt (his report, 2026-11-23): logged-out desktop
+  // Marketplace pins a full-width bar to the bottom of the screen with
+  // Log in / Create account buttons. It is not a dialog and has no
+  // password field, so the wall-hiding above misses it. Find it by
+  // shape: fixed to the bottom edge, nearly full width, bar height, and
+  // carrying a login call-to-action — then hide the outermost such bar.
+  // Anything holding listing links is never touched.
+  function hideBottomLoginBar() {
+    try {
+      var els = document.querySelectorAll('div, section, footer, form');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.getAttribute('data-rf-hidden')) continue;
+        var pos = '';
+        try { pos = window.getComputedStyle(el).position; } catch (e) {}
+        if (pos !== 'fixed' && pos !== 'sticky') continue;
+        var r = el.getBoundingClientRect();
+        if (r.height < 24 || r.height > 160) continue;
+        if (r.width < window.innerWidth * 0.9) continue;
+        if (Math.abs(r.bottom - window.innerHeight) > 6) continue;
+        if (isListingHolder(el)) continue;
+        var text = el.textContent || '';
+        if (text.indexOf('Log in') < 0 && text.indexOf('Log In') < 0 &&
+            text.indexOf('Create new account') < 0 &&
+            text.indexOf('Create account') < 0 &&
+            text.indexOf('Sign up') < 0) continue;
+        // Climb to the outermost ancestor that is still a bottom bar,
+        // so padding/background wrappers go with it.
+        var bar = el;
+        var p = el.parentElement;
+        while (p) {
+          var pr = p.getBoundingClientRect();
+          var ppos = '';
+          try { ppos = window.getComputedStyle(p).position; } catch (e) {}
+          if ((ppos === 'fixed' || ppos === 'sticky') &&
+              pr.height >= 24 && pr.height <= 180 &&
+              pr.width >= window.innerWidth * 0.9 &&
+              Math.abs(pr.bottom - window.innerHeight) <= 6 &&
+              !isListingHolder(p)) {
+            bar = p; p = p.parentElement;
+          } else break;
+        }
+        bar.setAttribute('data-rf-hidden', '1');
+        bar.style.setProperty('display', 'none', 'important');
+      }
+    } catch (e) {}
+  }
   function apply() {
-    if (!tryClose()) hideLoginWalls();
+    if (S.dismissLogin) {
+      if (!tryClose()) hideLoginWalls();
+    }
+    if (S.blockLoginBar) hideBottomLoginBar();
     unlockScroll();
   }
   apply();
