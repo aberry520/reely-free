@@ -156,54 +156,120 @@ export function buildFacebookScript(settings: FilterSettings): string {
   // hard-bounded (height and link count checked at every step and
   // on the result) so it can never walk out into the feed column:
   // an oversized "unit" is simply left alone.
-  function findReelsUnit(header) {
+  // The section header ROW (icon + "Reels" + menu): climb from
+  // the text to the first full-width, row-tall ancestor.
+  function findHeaderRow(hd) {
     try {
-      var hasMedia = function (root) {
-        return !!(root.querySelector &&
-          (root.querySelector('video') ||
-           root.querySelector('a[href*="/reel/"]')));
-      };
-      var unit = header, depth = 0;
-      while (unit && depth < 6 && !hasMedia(unit)) {
-        unit = unit.parentElement; depth++;
-        if (!unit) return null;
-        var r = unit.getBoundingClientRect();
-        if (r.height > 1200) return null;
+      var row = hd, i = 0;
+      while (row && i < 4) {
+        var r = row.getBoundingClientRect();
+        if (r.width >= window.innerWidth * 0.85 && r.height <= 72) return row;
+        row = row.parentElement; i++;
       }
-      if (!unit || !hasMedia(unit)) return null;
-      var ur = unit.getBoundingClientRect();
-      if (ur.height < 80 || ur.height > 1200) return null;
-      if (unit.querySelectorAll &&
-          unit.querySelectorAll('a').length > 24) return null;
-      return unit;
-    } catch (e) { return null; }
+    } catch (e) {}
+    return null;
+  }
+  // Does root hold a reel CARD? Media inside the header row does
+  // NOT count — the header's own icon is itself a /reel/ link on
+  // this layout, which is exactly what fooled the first version:
+  // the climb "found media" inside the header and stopped there,
+  // so the unit it measured was the 40px header and the height
+  // guard then rejected it (Austin's screenshot: no cover at all).
+  function hasCardMedia(root, headerRow) {
+    try {
+      var vids = root.querySelectorAll('video');
+      for (var i = 0; i < vids.length; i++) {
+        if (!headerRow.contains(vids[i])) return true;
+      }
+      var imgs = root.querySelectorAll('img');
+      for (var j = 0; j < imgs.length; j++) {
+        if (headerRow.contains(imgs[j])) continue;
+        var ir = imgs[j].getBoundingClientRect();
+        if (ir.height >= 150 && ir.width >= 200) return true;
+      }
+      var links = root.querySelectorAll('a[href*="/reel/"]');
+      for (var k = 0; k < links.length; k++) {
+        if (!headerRow.contains(links[k])) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function findReelsUnit(headerRow) {
+    try {
+      var unit = headerRow.parentElement, depth = 0;
+      while (unit && depth < 6) {
+        var r = unit.getBoundingClientRect();
+        if (r.height > 1400) return null;
+        if (hasCardMedia(unit, headerRow)) {
+          if (r.height < 80) return null;
+          if (unit.querySelectorAll &&
+              unit.querySelectorAll('a').length > 24) return null;
+          return unit;
+        }
+        unit = unit.parentElement; depth++;
+      }
+    } catch (e) {}
+    return null;
+  }
+  function buildCover(heightPx) {
+    var cover = document.createElement('div');
+    cover.setAttribute('data-rf-cover', '1');
+    var bg = '';
+    try { bg = window.getComputedStyle(document.body).backgroundColor; } catch (e) {}
+    if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') bg = '#ffffff';
+    cover.style.cssText =
+      'position:absolute;left:0;top:0;right:0;z-index:50;' +
+      'display:flex;align-items:center;justify-content:center;' +
+      (heightPx ? ('height:' + heightPx + 'px;') : 'bottom:0;');
+    cover.style.backgroundColor = bg;
+    var img = document.createElement('img');
+    img.src = LOGO;
+    img.alt = 'Reely Free';
+    img.style.cssText =
+      'width:200px;max-width:70%;display:block;border-radius:18px;';
+    cover.appendChild(img);
+    return cover;
   }
   function coverReelsUnit(unit) {
     try {
-      if (!unit) return;
-      if (unit.querySelector('[data-rf-cover]')) return;
+      if (!unit || unit.querySelector('[data-rf-cover]')) return;
       unit.setAttribute('data-rf-covered', '1');
       try {
         if (window.getComputedStyle(unit).position === 'static') {
           unit.style.setProperty('position', 'relative');
         }
       } catch (e) {}
-      var cover = document.createElement('div');
-      cover.setAttribute('data-rf-cover', '1');
-      var bg = '';
-      try { bg = window.getComputedStyle(document.body).backgroundColor; } catch (e) {}
-      if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') bg = '#ffffff';
-      cover.style.cssText =
-        'position:absolute;left:0;top:0;right:0;bottom:0;z-index:20;' +
-        'display:flex;align-items:center;justify-content:center;';
-      cover.style.backgroundColor = bg;
-      var img = document.createElement('img');
-      img.src = LOGO;
-      img.alt = 'Reely Free';
-      img.style.cssText =
-        'width:200px;max-width:70%;display:block;border-radius:18px;';
-      cover.appendChild(img);
-      unit.appendChild(cover);
+      unit.appendChild(buildCover(0));
+    } catch (e) {}
+  }
+  // Fallback when the section has no wrapper of its own (header
+  // and cards are plain siblings in the feed column): hang the
+  // cover off the header row itself, sized to span the header
+  // plus the card siblings that follow it, stopping at the first
+  // sibling that is a normal post.
+  function coverFromRow(headerRow) {
+    try {
+      var top = headerRow.getBoundingClientRect().top;
+      var bottom = headerRow.getBoundingClientRect().bottom;
+      var n = headerRow.nextElementSibling, count = 0;
+      while (n && count < 3) {
+        var nt = '';
+        try { nt = n.innerText || n.textContent || ''; } catch (e) {}
+        if (n.getAttribute && n.getAttribute('role') === 'article' &&
+            /Comments/.test(nt)) break;
+        var nr = n.getBoundingClientRect();
+        if (nr.height > 0) bottom = Math.max(bottom, nr.bottom);
+        if (bottom - top > 1400) return;
+        n = n.nextElementSibling; count++;
+      }
+      if (!count) return;
+      headerRow.setAttribute('data-rf-covered', '1');
+      try {
+        if (window.getComputedStyle(headerRow).position === 'static') {
+          headerRow.style.setProperty('position', 'relative');
+        }
+      } catch (e) {}
+      headerRow.appendChild(buildCover(Math.round(bottom - top)));
     } catch (e) {}
   }
   // Walk up from a link to a plausible card container and hide that.
@@ -358,20 +424,27 @@ export function buildFacebookScript(settings: FilterSettings): string {
         }
         // Reels sections: find the "Reels" header and cover its
         // unit with the branded panel. The section itself is left
-        // completely untouched underneath.
-        var heads = document.querySelectorAll(
-          'div, span, h2, h3, h4, [role="heading"]');
-        for (var hh = 0; hh < heads.length; hh++) {
-          var hd = heads[hh];
-          if (hd.children && hd.children.length > 1) continue;
-          var ht = (hd.textContent || '').trim();
-          if (ht !== 'Reels' && ht !== 'Reels and short videos') continue;
-          if (hd.closest && hd.closest('[data-rf-covered]')) continue;
-          var hr2 = hd.getBoundingClientRect();
-          if (hr2.height > 48) continue;
-          var unit2 = findReelsUnit(hd);
-          if (unit2) coverReelsUnit(unit2);
-        }
+        // completely untouched underneath. Wrapped so a failure
+        // here can never break the rest of the pass.
+        try {
+          var heads = document.querySelectorAll(
+            'div, span, h2, h3, h4, [role="heading"]');
+          for (var hh = 0; hh < heads.length; hh++) {
+            var hd = heads[hh];
+            if (hd.children && hd.children.length > 1) continue;
+            var ht = (hd.textContent || '').trim();
+            if (ht !== 'Reels' && ht !== 'Reels and short videos') continue;
+            if (hd.closest && hd.closest('[data-rf-covered]')) continue;
+            var hr2 = hd.getBoundingClientRect();
+            if (hr2.height > 48) continue;
+            var row2 = findHeaderRow(hd);
+            if (!row2) continue;
+            if (row2.querySelector('[data-rf-cover]')) continue;
+            var unit2 = findReelsUnit(row2);
+            if (unit2) coverReelsUnit(unit2);
+            else coverFromRow(row2);
+          }
+        } catch (e) {}
       }
       var posts = document.querySelectorAll('[role="article"]');
       for (var j = 0; j < posts.length; j++) {
