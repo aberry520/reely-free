@@ -87,10 +87,37 @@ export default function SettingsScreen() {
         onChange={set('fbHideSponsored')}
       />
 
+      <Text style={[styles.section, { color: theme.text }]}>Getting home</Text>
+      <ToggleRow
+        label="Floating home button"
+        detail="A movable button that's always on screen. Drag it anywhere; tap it to go home."
+        value={settings.navButton}
+        onChange={set('navButton')}
+      />
+      <ToggleRow
+        label="Dismiss from bottom"
+        detail="Swipe up on the bar at the bottom center. iOS often steals this gesture for itself, so it can be hit or miss."
+        value={settings.navBottomSwipe}
+        onChange={set('navBottomSwipe')}
+      />
+      <ToggleRow
+        label="Dismiss from left"
+        detail="Swipe in from the left edge — the standard iOS back gesture."
+        value={settings.navLeftEdge}
+        onChange={set('navLeftEdge')}
+      />
+      <ToggleRow
+        label="Dismiss from right"
+        detail="Swipe in from the right edge of the screen."
+        value={settings.navRightEdge}
+        onChange={set('navRightEdge')}
+      />
+
       <Text style={[styles.note, { color: theme.muted }]}>
         Changes apply the next time you open Facebook or YouTube. Marketplace
         is never filtered, and Messenger stays in its own app. The app follows
-        your phone's light/dark setting automatically.
+        your phone's light/dark setting automatically. If you turn every
+        way home off, the floating button stays anyway so you can't get stuck.
       </Text>
     </ScrollView>
   );

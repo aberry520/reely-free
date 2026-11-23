@@ -1,21 +1,36 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { SettingsProvider } from '../src/lib/settings';
+import { SettingsProvider, useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
 
-// No headers on Home, Facebook or YouTube — the site screens are full-screen
-// and he swipes up from the bottom to get back home. Settings keeps a normal
-// header with a back button.
-export default function RootLayout() {
+// No headers on Home, Facebook or YouTube — the site screens are full-screen.
+// Settings keeps a normal header with a back button.
+//
+// The left-edge swipe on the site screens is the stack's built-in iOS back
+// gesture; it follows his "swipe from left edge" setting.
+function AppStack() {
   const theme = useTheme();
+  const { settings } = useSettings();
   return (
-    <SettingsProvider>
+    <>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="facebook" options={{ headerShown: false }} />
-        <Stack.Screen name="youtube" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="facebook"
+          options={{
+            headerShown: false,
+            gestureEnabled: settings.navLeftEdge,
+          }}
+        />
+        <Stack.Screen
+          name="youtube"
+          options={{
+            headerShown: false,
+            gestureEnabled: settings.navLeftEdge,
+          }}
+        />
         <Stack.Screen
           name="settings"
           options={{
@@ -26,6 +41,14 @@ export default function RootLayout() {
           }}
         />
       </Stack>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SettingsProvider>
+      <AppStack />
     </SettingsProvider>
   );
 }

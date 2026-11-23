@@ -20,6 +20,11 @@ export interface FilterSettings {
   fbBlockReels: boolean;
   fbHideSuggested: boolean;
   fbHideSponsored: boolean;
+  // Ways to get back home from a site screen (Austin's picks, 2026-11-22)
+  navButton: boolean;
+  navBottomSwipe: boolean;
+  navLeftEdge: boolean;
+  navRightEdge: boolean;
 }
 
 export const DEFAULT_SETTINGS: FilterSettings = {
@@ -29,6 +34,13 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   fbBlockReels: true,
   fbHideSuggested: true,
   fbHideSponsored: true,
+  // Bottom swipe defaults OFF: iOS grabs the whole bottom edge for its own
+  // home gesture, so it was inconsistent in his on-device test. The other
+  // three default on.
+  navButton: true,
+  navBottomSwipe: false,
+  navLeftEdge: true,
+  navRightEdge: true,
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';

@@ -28,10 +28,14 @@ const BTN_POS_KEY = 'reelyfree-homebtn-v1';
 // mobile site with the filter layer injected before content loads. Login
 // cookies persist in the WebView, so signing in is a one-time thing per site.
 //
-// Getting home: the iOS left-edge swipe (the stack's built-in back gesture)
-// works, and a translucent floating home button is always on screen. The
-// button can be dragged anywhere and snaps to the nearest side; its spot is
-// remembered across both sites. A tap on it goes home.
+// Getting home — each way is individually toggleable in Settings:
+// - left-edge swipe: the stack's built-in iOS back gesture (see _layout)
+// - right-edge swipe: a thin zone on the right edge, swipe left to go home
+// - bottom swipe: a bar at the bottom center (iOS often steals this one)
+// - the translucent floating home button: draggable anywhere, snaps to the
+//   nearest side, remembers its spot across both sites; a tap goes home
+// If he turns all four off, the button stays anyway as a fallback so a site
+// screen can never become a dead end.
 export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   const theme = useTheme();
@@ -44,6 +48,63 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
   const script = useMemo(() => buildScript(settings), [buildScript, settings]);
 
   const goHome = () => router.navigate('/');
+
+  // --- Bottom swipe bar (optional; iOS often steals this gesture) ---------
+  const bottomFiredRef = useRef(false);
+  const bottomBar = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          bottomFiredRef.current = false;
+        },
+        onPanResponderMove: (_, g) => {
+          if (!bottomFiredRef.current && g.dy <= -45) {
+            bottomFiredRef.current = true;
+            goHome();
+          }
+        },
+        onPanResponderRelease: (_, g) => {
+          if (
+            !bottomFiredRef.current &&
+            Math.abs(g.dy) < 8 &&
+            Math.abs(g.dx) < 8
+          ) {
+            goHome();
+          }
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // --- Right-edge swipe ----------------------------------------------------
+  const rightFiredRef = useRef(false);
+  const rightEdge = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          rightFiredRef.current = false;
+        },
+        onPanResponderMove: (_, g) => {
+          if (!rightFiredRef.current && g.dx <= -45) {
+            rightFiredRef.current = true;
+            goHome();
+          }
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // The button shows when its toggle is on — or when every other way home
+  // is off, so he can never get stuck on a site screen.
+  const showButton =
+    settings.navButton ||
+    (!settings.navBottomSwipe &&
+      !settings.navLeftEdge &&
+      !settings.navRightEdge);
 
   // --- Draggable floating home button -------------------------------------
   const win = Dimensions.get('window');
@@ -164,7 +225,17 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
           </View>
         )}
       />
-      {btnReady && (
+      {settings.navBottomSwipe && (
+        <View style={styles.grabberZone} {...bottomBar.panHandlers}>
+          <View
+            style={[styles.grabberPill, { backgroundColor: theme.grabber }]}
+          />
+        </View>
+      )}
+      {settings.navRightEdge && (
+        <View style={styles.rightEdgeZone} {...rightEdge.panHandlers} />
+      )}
+      {showButton && btnReady && (
         <Animated.View
           {...btnPan.panHandlers}
           accessibilityLabel="Go home"
@@ -195,6 +266,30 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  grabberZone: {
+    position: 'absolute',
+    bottom: 0,
+    alignSelf: 'center',
+    width: 180,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 9,
+    zIndex: 9,
+  },
+  grabberPill: {
+    width: 134,
+    height: 5,
+    borderRadius: 3,
+  },
+  rightEdgeZone: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 26,
+    zIndex: 9,
   },
   homeBtn: {
     position: 'absolute',
