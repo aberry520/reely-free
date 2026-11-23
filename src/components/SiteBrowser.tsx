@@ -20,6 +20,9 @@ import { useTheme } from '../lib/theme';
 interface SiteBrowserProps {
   homeUrl: string;
   buildScript: (settings: FilterSettings) => string;
+  // URL fragments where pull-to-refresh is disabled — e.g. YouTube watch
+  // pages, where a downward drag means "go back", not "reload".
+  noRefreshPaths?: string[];
 }
 
 const BTN = 50;
@@ -37,7 +40,11 @@ const BTN_POS_KEY = 'reelyfree-homebtn-v1';
 //   nearest side, remembers its spot across both sites; a tap goes home
 // If he turns all four off, the button stays anyway as a fallback so a site
 // screen can never become a dead end.
-export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) {
+export default function SiteBrowser({
+  homeUrl,
+  buildScript,
+  noRefreshPaths,
+}: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -51,8 +58,13 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
   const goHome = () => router.navigate('/');
 
   // In-page back (e.g. from a video back to the feed): the button only
-  // appears when the WebView actually has somewhere to go back to.
+  // appears when the WebView actually has somewhere to go back to. The
+  // current URL is tracked too, for pull-to-refresh rules.
   const [canGoBack, setCanGoBack] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState(homeUrl);
+  const pullToRefresh = !(
+    noRefreshPaths ?? []
+  ).some((p) => currentUrl.includes(p));
 
   // --- Bottom swipe bar (optional; iOS often steals this gesture) ---------
   const bottomFiredRef = useRef(false);
@@ -218,11 +230,14 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
         domStorageEnabled
         thirdPartyCookiesEnabled
         sharedCookiesEnabled
-        pullToRefreshEnabled
+        pullToRefreshEnabled={pullToRefresh}
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         setSupportMultipleWindows={false}
-        onNavigationStateChange={(nav) => setCanGoBack(nav.canGoBack)}
+        onNavigationStateChange={(nav) => {
+          setCanGoBack(nav.canGoBack);
+          setCurrentUrl(nav.url);
+        }}
         onShouldStartLoadWithRequest={(req) => {
           // Nothing leaves the app: app schemes (fb://, youtube://,
           // intent:, …) and app-store links are refused outright, so even

@@ -114,11 +114,14 @@ export function buildYouTubeScript(settings: FilterSettings): string {
   // Swipe down on the video to go back, like the app's mini-player gesture
   // (here the video stops — the web player can't float). The touch must
   // start on the player itself, so scrolling the comments never triggers
-  // it, and a clear downward drag is claimed early so the WebView's
-  // pull-to-refresh doesn't fire instead.
+  // it. Two hard-won details: the listeners sit on window in the CAPTURE
+  // phase because YouTube's own player handlers stop touch events from
+  // bubbling up to document, and the drag is claimed (preventDefault) from
+  // the first few pixels — wait any longer and the WebView's native
+  // scrolling takes the gesture over and it can never be claimed back.
   if (S.swipeDownBack) {
     var gStartX = 0, gStartY = 0, gArmed = false, gFired = false;
-    document.addEventListener('touchstart', function (e) {
+    window.addEventListener('touchstart', function (e) {
       gArmed = false; gFired = false;
       try {
         if (location.pathname !== '/watch') return;
@@ -134,20 +137,20 @@ export function buildYouTubeScript(settings: FilterSettings): string {
           gArmed = true; gStartX = t.clientX; gStartY = t.clientY;
         }
       } catch (err) {}
-    }, { passive: true });
-    document.addEventListener('touchmove', function (e) {
+    }, { passive: true, capture: true });
+    window.addEventListener('touchmove', function (e) {
       if (!gArmed || gFired) return;
       try {
         var t = e.changedTouches && e.changedTouches[0];
         if (!t) return;
         var dx = t.clientX - gStartX, dy = t.clientY - gStartY;
-        if (dy > 10 && e.cancelable) e.preventDefault();
+        if (dy > 4 && e.cancelable) e.preventDefault();
         if (dy >= 80 && Math.abs(dy) > Math.abs(dx) * 1.5) {
           gFired = true; gArmed = false;
           window.history.back();
         }
       } catch (err) {}
-    }, { passive: false });
+    }, { passive: false, capture: true });
   }
   true;
 })();
