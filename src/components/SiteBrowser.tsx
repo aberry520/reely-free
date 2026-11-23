@@ -1,6 +1,7 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import React, {
   useCallback,
   useEffect,
@@ -23,6 +24,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import {
+  endFocus,
+  formatBedtime,
+  formatClock,
+  formatFocusLeft,
+  getFocusUntil,
+  isBedtimeNow,
+  isManualLocked,
+  lockManually,
+  unlockManually,
+} from '../lib/locks';
 import type { FilterSettings } from '../lib/settings';
 import { useSettings } from '../lib/settings';
 import { useTheme } from '../lib/theme';
@@ -32,6 +44,27 @@ import {
   formatMinutes,
   getTodaySeconds,
 } from '../lib/usage';
+
+// Haptics for the floating control (Austin's ask, 2026-11-23):
+// a light tap when the fan opens or a satellite is pressed, a
+// medium tap when a double-tap action fires, a light tap when a
+// drag snaps the button to a side. Wrapped so a device without
+// haptics just does nothing instead of crashing.
+function haptic(kind: 'light' | 'medium' | 'selection') {
+  try {
+    if (kind === 'selection') {
+      Haptics.selectionAsync().catch(() => {});
+    } else {
+      Haptics.impactAsync(
+        kind === 'medium'
+          ? Haptics.ImpactFeedbackStyle.Medium
+          : Haptics.ImpactFeedbackStyle.Light,
+      ).catch(() => {});
+    }
+  } catch {
+    // Haptics unavailable — ignore.
+  }
+}
 
 interface SiteBrowserProps {
   homeUrl: string;
@@ -125,6 +158,17 @@ const APPS: {
 
 const BTN = 50;
 const BTN_POS_KEY = 'reelyfree-homebtn-v1';
+// Bedtime (Austin's ask, 2026-11-23): which settings key governs
+// each door's bedtime hour (0 = off, 21 = 9 PM, 22 = 10 PM,
+// 23 = 11 PM, 24 = midnight). The door locks from that hour
+// until 5 AM.
+const BEDTIME_CFG: Partial<Record<AppId, keyof FilterSettings>> = {
+  facebook: 'fbBedtimeHour',
+  instagram: 'igBedtimeHour',
+  youtube: 'ytBedtimeHour',
+  marketplace: 'mpBedtimeHour',
+  marketplaceAccount: 'mpaBedtimeHour',
+};
 // The door visited before this one (Austin's "last door"
 // double-tap, 2026-11-23): the previous door's route, kept in
 // storage so it survives app restarts.
@@ -237,8 +281,19 @@ export default function SiteBrowser({
           if (!cancelled) setUsedSec(s);
         })
         .catch(() => {});
+      isManualLocked(appId)
+        .then((v) => {
+          if (!cancelled) setManualLocked(v);
+        })
+        .catch(() => {});
+      getFocusUntil()
+        .then((u) => {
+          if (!cancelled) setFocusUntil(u);
+        })
+        .catch(() => {});
       let pending = 0;
       let last = Date.now();
+      let sinceCheck = 0;
       const iv = setInterval(() => {
         const now = Date.now();
         if (AppState.currentState === 'active') {
@@ -250,6 +305,18 @@ export default function SiteBrowser({
           pending -= whole;
           addUsageSeconds(appId, whole);
           setUsedSec((s) => s + whole);
+        }
+        // Every 30s: refresh the focus countdown and clear a
+        // focus timer that has run out while the door was open.
+        sinceCheck += 1;
+        if (sinceCheck >= 30) {
+          sinceCheck = 0;
+          setNowMs(now);
+          getFocusUntil()
+            .then((u) => {
+              if (!cancelled) setFocusUntil(u);
+            })
+            .catch(() => {});
         }
       }, 1000);
       return () => {
@@ -264,6 +331,28 @@ export default function SiteBrowser({
   const overLimit = limitMin > 0 && usedSec >= limitSec;
   const remainingSec = limitSec - usedSec;
   const showLock = overLimit && limitLock;
+
+  // Locks beyond the daily limit (Austin's ask, 2026-11-23): a
+  // manual lock from the fan, a per-door bedtime, and the global
+  // focus timer. One cover serves all four reasons; focus wins,
+  // then manual, then bedtime, then the limit.
+  const bedtimeKey = appId ? BEDTIME_CFG[appId] : null;
+  const bedtimeHour = bedtimeKey ? (settings[bedtimeKey] as number) : 0;
+  const isBedtime = isBedtimeNow(bedtimeHour);
+  const [manualLocked, setManualLocked] = useState(false);
+  const [focusUntil, setFocusUntil] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const focusActive = focusUntil !== null && focusUntil > nowMs;
+  const coverReason: 'limit' | 'manual' | 'bedtime' | 'focus' | null =
+    focusActive
+      ? 'focus'
+      : manualLocked
+        ? 'manual'
+        : isBedtime
+          ? 'bedtime'
+          : showLock
+            ? 'limit'
+            : null;
   const showWarn =
     limitMin > 0 &&
     !limitLock &&
@@ -389,10 +478,12 @@ export default function SiteBrowser({
   const expandedRef = useRef(false);
   const collapseOnlyRef = useRef(false);
   const openFan = () => {
+    haptic('selection');
     expandedRef.current = true;
     setExpanded(true);
   };
   const closeFan = () => {
+    haptic('selection');
     expandedRef.current = false;
     setExpanded(false);
   };
@@ -414,16 +505,24 @@ export default function SiteBrowser({
   doubleTapActionRef.current = () => {
     switch (hubDoubleTapRef.current) {
       case 'back':
-        if (canGoBackRef.current) webRef.current?.goBack();
+        if (canGoBackRef.current) {
+          haptic('medium');
+          webRef.current?.goBack();
+        }
         break;
       case 'home':
+        haptic('medium');
         goHome();
         break;
       case 'settings':
+        haptic('medium');
         router.navigate('/settings');
         break;
       case 'lastDoor':
-        if (lastDoorRef.current) router.replace(lastDoorRef.current);
+        if (lastDoorRef.current) {
+          haptic('medium');
+          router.replace(lastDoorRef.current);
+        }
         break;
       default:
         break;
@@ -526,6 +625,7 @@ export default function SiteBrowser({
             y: Math.min(Math.max(movedY, 8), maxY),
           };
           posRef.current = target;
+          haptic('light');
           Animated.spring(pan, {
             toValue: target,
             useNativeDriver: false,
@@ -586,6 +686,24 @@ export default function SiteBrowser({
       ),
       action: () => {
         if (canGoBack) webRef.current?.goBack();
+      },
+    });
+  }
+  // Lock until tomorrow (Austin's ask, 2026-11-23): one tap in the
+  // fan locks this door for the rest of the day. The cover it
+  // shows has an Unlock button, so a stray tap isn't a trap.
+  if (appId) {
+    satellites.push({
+      key: 'lock',
+      label: 'Lock until tomorrow',
+      bg: theme.homeBtnBg,
+      icon: (
+        <MaterialIcons name="lock" size={24} color={theme.homeBtnGlyph} />
+      ),
+      action: () => {
+        lockManually(appId)
+          .then(() => setManualLocked(true))
+          .catch(() => {});
       },
     });
   }
@@ -758,7 +876,7 @@ export default function SiteBrowser({
           </Pressable>
         </View>
       )}
-      {showLock && limitCfg && (
+      {coverReason && limitCfg && (
         <View
           style={[
             styles.lockOverlay,
@@ -770,11 +888,22 @@ export default function SiteBrowser({
             style={styles.lockLogo}
           />
           <Text style={[styles.lockTitle, { color: theme.text }]}>
-            {limitCfg.label} time's up for today
+            {coverReason === 'focus' && focusUntil
+              ? `Focus until ${formatClock(focusUntil)}`
+              : coverReason === 'manual'
+                ? `${limitCfg.label} locked until tomorrow`
+                : coverReason === 'bedtime'
+                  ? `Past bedtime for ${limitCfg.label}`
+                  : `${limitCfg.label} time's up for today`}
           </Text>
           <Text style={[styles.lockDetail, { color: theme.muted }]}>
-            You've used {formatMinutes(usedSec)} of your{' '}
-            {formatLimit(limitMin)} daily limit. It resets tomorrow.
+            {coverReason === 'focus' && focusUntil
+              ? `Every door is paused — ${formatFocusLeft(focusUntil)}.`
+              : coverReason === 'manual'
+                ? `You locked ${limitCfg.label} from the fan. It unlocks tomorrow — or unlock it now below.`
+                : coverReason === 'bedtime'
+                  ? `You set a ${formatBedtime(bedtimeHour)} bedtime for ${limitCfg.label}. It opens again in the morning.`
+                  : `You've used ${formatMinutes(usedSec)} of your ${formatLimit(limitMin)} daily limit. It resets tomorrow.`}
           </Text>
           <Pressable
             style={[styles.lockButton, { backgroundColor: theme.accent }]}
@@ -782,6 +911,44 @@ export default function SiteBrowser({
           >
             <Text style={styles.lockButtonText}>Go home</Text>
           </Pressable>
+          {coverReason === 'manual' && appId && (
+            <Pressable
+              style={[
+                styles.lockButtonSecondary,
+                { borderColor: theme.border },
+              ]}
+              onPress={() => {
+                unlockManually(appId)
+                  .then(() => setManualLocked(false))
+                  .catch(() => {});
+              }}
+            >
+              <Text
+                style={[styles.lockButtonSecondaryText, { color: theme.text }]}
+              >
+                Unlock for today
+              </Text>
+            </Pressable>
+          )}
+          {coverReason === 'focus' && (
+            <Pressable
+              style={[
+                styles.lockButtonSecondary,
+                { borderColor: theme.border },
+              ]}
+              onPress={() => {
+                endFocus()
+                  .then(() => setFocusUntil(null))
+                  .catch(() => {});
+              }}
+            >
+              <Text
+                style={[styles.lockButtonSecondaryText, { color: theme.text }]}
+              >
+                End focus
+              </Text>
+            </Pressable>
+          )}
         </View>
       )}
       {navCfg.bottomSwipe && (
@@ -819,6 +986,7 @@ export default function SiteBrowser({
               key={s.key}
               accessibilityLabel={s.label}
               onPress={() => {
+                haptic('light');
                 closeFan();
                 s.action();
               }}
@@ -981,6 +1149,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   lockButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  lockButtonSecondary: {
+    marginTop: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  lockButtonSecondaryText: { fontSize: 15, fontWeight: '600' },
   satellite: {
     position: 'absolute',
     width: 46,

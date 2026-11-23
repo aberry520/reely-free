@@ -86,6 +86,23 @@ export interface FilterSettings {
   navLeftEdge: boolean;
   navRightEdge: boolean;
   navBackButton: boolean;
+  // Branded header per door (Austin's ask, 2026-11-23): the Reely
+  // Free mark worked into each door's own header, without blocking
+  // anything that header does. Marketplace — with account already
+  // had mpaBrandHeader (a full cover over the disposable nav).
+  fbBrandHeader: boolean;
+  igBrandHeader: boolean;
+  ytBrandHeader: boolean;
+  mpGuestBrandHeader: boolean;
+  // Bedtime per door (Austin's ask, 2026-11-23): the hour after
+  // which the door locks until morning. 0 = off, 21 = 9 PM,
+  // 22 = 10 PM, 23 = 11 PM, 24 = midnight. The lock runs from the
+  // bedtime hour until 5 AM.
+  fbBedtimeHour: number;
+  igBedtimeHour: number;
+  ytBedtimeHour: number;
+  mpBedtimeHour: number;
+  mpaBedtimeHour: number;
   // What a double-tap on the floating button does (Austin's ask,
   // 2026-11-23): 'none' = no double-tap action (a double tap just
   // opens then closes the fan, as before). 'lastDoor' = the door
@@ -139,6 +156,15 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   navRightEdge: true,
   navBackButton: true,
   hubDoubleTap: 'none',
+  fbBrandHeader: true,
+  igBrandHeader: true,
+  ytBrandHeader: true,
+  mpGuestBrandHeader: true,
+  fbBedtimeHour: 0,
+  igBedtimeHour: 0,
+  ytBedtimeHour: 0,
+  mpBedtimeHour: 0,
+  mpaBedtimeHour: 0,
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';

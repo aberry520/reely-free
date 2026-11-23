@@ -12,7 +12,11 @@ import type { FilterSettings } from '../src/lib/settings';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
 import type { UsageAppId } from '../src/lib/usage';
-import { formatMinutes, getTodaySeconds } from '../src/lib/usage';
+import {
+  formatMinutes,
+  getTodaySeconds,
+  getWeekSeconds,
+} from '../src/lib/usage';
 
 function ToggleRow({
   label,
@@ -48,6 +52,16 @@ const LIMIT_OPTIONS = [
   { v: 240, l: '4h' },
 ];
 
+// Bedtime per door (Austin's ask, 2026-11-23): the hour after
+// which the door locks until 5 AM. 0 = off, 24 = midnight.
+const BEDTIME_OPTIONS = [
+  { v: 0, l: 'Off' },
+  { v: 21, l: '9 PM' },
+  { v: 22, l: '10 PM' },
+  { v: 23, l: '11 PM' },
+  { v: 24, l: '12 AM' },
+];
+
 // What two quick taps on the floating Reely Free button do
 // (Austin's ask, 2026-11-23). None = no double-tap action.
 const DOUBLE_TAP_OPTIONS: {
@@ -67,16 +81,22 @@ const DOUBLE_TAP_OPTIONS: {
 // the cap. Time counts only while the door is open in Reely Free.
 function UsageLimitRows({
   usedSec,
+  weekSec,
   limitMin,
   onChangeLimit,
   lock,
   onChangeLock,
+  bedtimeHour,
+  onChangeBedtime,
 }: {
   usedSec: number;
+  weekSec: number;
   limitMin: number;
   onChangeLimit: (v: number) => void;
   lock: boolean;
   onChangeLock: (v: boolean) => void;
+  bedtimeHour: number;
+  onChangeBedtime: (v: number) => void;
 }) {
   const theme = useTheme();
   return (
@@ -87,9 +107,10 @@ function UsageLimitRows({
             Daily limit
           </Text>
           <Text style={[styles.rowDetail, { color: theme.muted }]}>
-            Used today: {formatMinutes(usedSec)}. Time counts only
-            while this door is open in Reely Free — time in the real
-            app isn't tracked.
+            Used today: {formatMinutes(usedSec)} · this week:{' '}
+            {formatMinutes(weekSec)}. Time counts only while this
+            door is open in Reely Free — time in the real app isn't
+            tracked.
           </Text>
           <View style={styles.chipRow}>
             {LIMIT_OPTIONS.map((o) => {
@@ -128,6 +149,46 @@ function UsageLimitRows({
         value={lock}
         onChange={onChangeLock}
       />
+      <View style={[styles.row, { borderBottomColor: theme.border }]}>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowLabel, { color: theme.text }]}>
+            Bedtime
+          </Text>
+          <Text style={[styles.rowDetail, { color: theme.muted }]}>
+            The door locks from this hour until 5 AM. Off = no
+            bedtime.
+          </Text>
+          <View style={styles.chipRow}>
+            {BEDTIME_OPTIONS.map((o) => {
+              const active = bedtimeHour === o.v;
+              return (
+                <Pressable
+                  key={o.v}
+                  onPress={() => onChangeBedtime(o.v)}
+                  style={[
+                    styles.chip,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: active
+                        ? theme.accent
+                        : theme.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: active ? '#fff' : theme.text },
+                    ]}
+                  >
+                    {o.l}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
     </>
   );
 }
@@ -218,8 +279,12 @@ export default function SettingsScreen() {
     (v: number) =>
       update({ [key]: v } as Partial<FilterSettings>);
 
-  // Today's usage per door, refreshed whenever Settings is opened.
+  // Today's and this week's usage per door, refreshed whenever
+  // Settings is opened.
   const [usage, setUsage] = useState<
+    Partial<Record<UsageAppId, number>>
+  >({});
+  const [weekUsage, setWeekUsage] = useState<
     Partial<Record<UsageAppId, number>>
   >({});
   useFocusEffect(
@@ -238,7 +303,15 @@ export default function SettingsScreen() {
             async (id) => [id, await getTodaySeconds(id)] as const,
           ),
         );
-        if (live) setUsage(Object.fromEntries(entries));
+        const weekEntries = await Promise.all(
+          ids.map(
+            async (id) => [id, await getWeekSeconds(id)] as const,
+          ),
+        );
+        if (live) {
+          setUsage(Object.fromEntries(entries));
+          setWeekUsage(Object.fromEntries(weekEntries));
+        }
       })();
       return () => {
         live = false;
@@ -320,13 +393,22 @@ export default function SettingsScreen() {
                 value={settings.fbStickyHeader}
                 onChange={set('fbStickyHeader')}
               />
+              <ToggleRow
+                label="Reely Free header"
+                detail="A slim Reely Free strip — the logo with 'Reely' and 'Free' either side — sits at the very top of the page, above Facebook's tab bar. The tabs and everything else keep working."
+                value={settings.fbBrandHeader}
+                onChange={set('fbBrandHeader')}
+              />
               <UsageLimitRows
                 usedSec={usage.facebook ?? 0}
+                weekSec={weekUsage.facebook ?? 0}
                 limitMin={settings.fbDailyLimitMin}
                 onChangeLimit={setNum('fbDailyLimitMin')}
                 lock={settings.fbLimitLock}
                 onChangeLock={set('fbLimitLock')}
-              />
+                bedtimeHour={settings.fbBedtimeHour}
+                onChangeBedtime={setNum('fbBedtimeHour')}
+                />
             </>
           )}
 
@@ -364,13 +446,22 @@ export default function SettingsScreen() {
                 value={settings.igBlockAppPromo}
                 onChange={set('igBlockAppPromo')}
               />
+              <ToggleRow
+                label="Reely Free header"
+                detail="The Instagram wordmark at the top left becomes the Reely Free mark. Tapping it still goes home, and the icons beside it are untouched."
+                value={settings.igBrandHeader}
+                onChange={set('igBrandHeader')}
+              />
               <UsageLimitRows
                 usedSec={usage.instagram ?? 0}
+                weekSec={weekUsage.instagram ?? 0}
                 limitMin={settings.igDailyLimitMin}
                 onChangeLimit={setNum('igDailyLimitMin')}
                 lock={settings.igLimitLock}
                 onChangeLock={set('igLimitLock')}
-              />
+                bedtimeHour={settings.igBedtimeHour}
+                onChangeBedtime={setNum('igBedtimeHour')}
+                />
             </>
           )}
 
@@ -414,13 +505,22 @@ export default function SettingsScreen() {
                 value={settings.ytSwipeDownBack}
                 onChange={set('ytSwipeDownBack')}
               />
+              <ToggleRow
+                label="Reely Free header"
+                detail="The YouTube logo at the top left becomes the Reely Free mark. Tapping it still goes home, and search and your avatar stay."
+                value={settings.ytBrandHeader}
+                onChange={set('ytBrandHeader')}
+              />
               <UsageLimitRows
                 usedSec={usage.youtube ?? 0}
+                weekSec={weekUsage.youtube ?? 0}
                 limitMin={settings.ytDailyLimitMin}
                 onChangeLimit={setNum('ytDailyLimitMin')}
                 lock={settings.ytLimitLock}
                 onChangeLock={set('ytLimitLock')}
-              />
+                bedtimeHour={settings.ytBedtimeHour}
+                onChangeBedtime={setNum('ytBedtimeHour')}
+                />
             </>
           )}
 
@@ -452,13 +552,22 @@ export default function SettingsScreen() {
                 value={settings.mpGuestNativeShare}
                 onChange={set('mpGuestNativeShare')}
               />
+              <ToggleRow
+                label="Reely Free header"
+                detail="The Facebook logo at the top left becomes the Reely Free mark. Tapping it still goes home, and search stays."
+                value={settings.mpGuestBrandHeader}
+                onChange={set('mpGuestBrandHeader')}
+              />
               <UsageLimitRows
                 usedSec={usage.marketplace ?? 0}
+                weekSec={weekUsage.marketplace ?? 0}
                 limitMin={settings.mpDailyLimitMin}
                 onChangeLimit={setNum('mpDailyLimitMin')}
                 lock={settings.mpLimitLock}
                 onChangeLock={set('mpLimitLock')}
-              />
+                bedtimeHour={settings.mpBedtimeHour}
+                onChangeBedtime={setNum('mpBedtimeHour')}
+                />
             </>
           )}
 
@@ -498,11 +607,14 @@ export default function SettingsScreen() {
               />
               <UsageLimitRows
                 usedSec={usage.marketplaceAccount ?? 0}
+                weekSec={weekUsage.marketplaceAccount ?? 0}
                 limitMin={settings.mpaDailyLimitMin}
                 onChangeLimit={setNum('mpaDailyLimitMin')}
                 lock={settings.mpaLimitLock}
                 onChangeLock={set('mpaLimitLock')}
-              />
+                bedtimeHour={settings.mpaBedtimeHour}
+                onChangeBedtime={setNum('mpaBedtimeHour')}
+                />
             </>
           )}
         </>

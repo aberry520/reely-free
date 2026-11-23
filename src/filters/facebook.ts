@@ -16,6 +16,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
     hideSponsored: settings.fbHideSponsored,
     blockAppPromo: settings.fbBlockAppPromo,
     stickyHeader: settings.fbStickyHeader,
+    brandHeader: settings.fbBrandHeader,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
   const logo = JSON.stringify(LOGO_FULL_DATA_URI);
@@ -158,6 +159,69 @@ export function buildFacebookScript(settings: FilterSettings): string {
   // an oversized "unit" is simply left alone.
   // The section header ROW (icon + "Reels" + menu): climb from
   // the text to the first full-width, row-tall ancestor.
+  // Branded header strip (Austin's ask, 2026-11-23): a slim
+  // Reely Free strip — "Reely" + mark + "Free" — inserted as an
+  // in-flow row immediately BEFORE the nav tablist, so it sits at
+  // the very top of the page and scrolls away with it while the
+  // sticky tab bar keeps sticking underneath. Nothing is hidden
+  // or covered, so every control in the header keeps working.
+  // (The Marketplace door instead covers its disposable nav —
+  // here the tabs ARE the navigation, so a cover would break
+  // the door.)
+  function brandHeaderStrip() {
+    try {
+      if (!S.brandHeader) return;
+      var strip = document.getElementById('rf-fb-strip');
+      if (strip && strip.isConnected) return;
+      var lists = document.querySelectorAll('[role="tablist"]');
+      var bar = null;
+      for (var i = 0; i < lists.length; i++) {
+        var list = lists[i];
+        var lr = list.getBoundingClientRect();
+        if (lr.top < -5 || lr.top > 80) continue;
+        if (lr.width < window.innerWidth * 0.9) continue;
+        var tabs = list.querySelectorAll('[role="tab"]');
+        if (tabs.length < 5) continue;
+        var positioned = 0;
+        for (var t = 0; t < tabs.length; t++) {
+          var al = tabs[t].getAttribute('aria-label') || '';
+          if (/of \\d+/.test(al)) positioned++;
+        }
+        if (positioned >= 2) { bar = list; break; }
+      }
+      if (!bar || !bar.parentElement) return;
+      strip = document.createElement('div');
+      strip.id = 'rf-fb-strip';
+      var bg = '';
+      var fg = '';
+      try {
+        var bs = getComputedStyle(document.body);
+        bg = bs.backgroundColor;
+        fg = bs.color;
+      } catch (e) {}
+      if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') {
+        bg = '#ffffff';
+      }
+      strip.style.cssText =
+        'display:flex;align-items:center;justify-content:center;gap:8px;' +
+        'height:30px;box-sizing:border-box;flex:none;' +
+        'background:' + bg + ';color:' + (fg || '#111111') + ';' +
+        'font-weight:800;font-size:15px;letter-spacing:0.2px;' +
+        'border-bottom:1px solid rgba(128,128,128,0.35);';
+      var left = document.createElement('span');
+      left.textContent = 'Reely';
+      var img = document.createElement('img');
+      img.src = MARK;
+      img.style.cssText =
+        'height:22px;width:22px;border-radius:6px;display:block;';
+      var right = document.createElement('span');
+      right.textContent = 'Free';
+      strip.appendChild(left);
+      strip.appendChild(img);
+      strip.appendChild(right);
+      bar.parentElement.insertBefore(strip, bar);
+    } catch (e) {}
+  }
   function findHeaderRow(hd) {
     try {
       var row = hd, i = 0;
@@ -503,6 +567,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
         location.replace('/');
         return;
       }
+      brandHeaderStrip();
       // Nav / shortcut entries that lead to Reels: the entry
       // stays, branded with the Reely Free mark instead of the
       // Reels icon (it used to be hidden; Austin asked for the

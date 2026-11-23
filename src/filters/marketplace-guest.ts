@@ -1,4 +1,5 @@
 import type { FilterSettings } from '../lib/settings';
+import { LOGO_MARK_DATA_URI } from './logo-data';
 
 // Builds the JavaScript injected into the DESKTOP facebook.com/marketplace
 // before page content loads, for the experimental guest door.
@@ -26,12 +27,15 @@ export function buildMarketplaceGuestScript(
     dismissLogin: settings.mpGuestDismissLogin,
     blockLoginBar: settings.mpGuestBlockLoginBar,
     nativeShare: settings.mpGuestNativeShare,
+    brandHeader: settings.mpGuestBrandHeader,
   });
+  const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
   return `
 (function () {
   var S = ${s};
-  if (!S.enabled || (!S.dismissLogin && !S.blockLoginBar && !S.nativeShare)) { true; return; }
+  var MARK = ${mark};
+  if (!S.enabled || (!S.dismissLogin && !S.blockLoginBar && !S.nativeShare && !S.brandHeader)) { true; return; }
   // Native share (Austin's ask, 2026-11-23): Facebook's own share
   // flow is useless logged out — its dialog wants an account. So a
   // tap on a Share control never reaches Facebook: the click is
@@ -548,8 +552,38 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // Branded header (Austin's ask, 2026-11-23): the Facebook "f"
+  // logo at the top left of the desktop header is swapped for the
+  // Reely Free mark. The link itself is untouched, so tapping it
+  // still goes home; search and the rest of the header are
+  // untouched.
+  function brandHeaderLogo() {
+    try {
+      if (!S.brandHeader) return;
+      var links = document.querySelectorAll('a[href="/"]');
+      for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+        if (link.getAttribute('data-rf-logo')) continue;
+        var r = link.getBoundingClientRect();
+        if (r.top < 0 || r.top > 90) continue;
+        if (r.width < 20 || r.width > 220) continue;
+        if (r.height < 20 || r.height > 60) continue;
+        if (!link.querySelector('svg, img')) continue;
+        while (link.firstChild) link.removeChild(link.firstChild);
+        var img = document.createElement('img');
+        img.src = MARK;
+        img.alt = 'Reely Free';
+        img.style.cssText =
+          'height:32px;width:32px;border-radius:8px;display:block;';
+        link.appendChild(img);
+        link.setAttribute('data-rf-logo', '1');
+        return;
+      }
+    } catch (e) {}
+  }
   function apply() {
     ensureStyle();
+    brandHeaderLogo();
     if (S.dismissLogin) {
       if (!tryClose()) hideLoginWalls();
     }

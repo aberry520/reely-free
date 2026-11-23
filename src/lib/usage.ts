@@ -53,6 +53,18 @@ export async function getTodaySeconds(appId: UsageAppId): Promise<number> {
   return data[todayKey()]?.[appId] ?? 0;
 }
 
+// This week's seconds in a door: today plus the six days before
+// it (the store keeps 14 days, so a full week is always there).
+export async function getWeekSeconds(appId: UsageAppId): Promise<number> {
+  const data = await loadUsage();
+  let total = 0;
+  for (let back = 0; back < 7; back++) {
+    const d = new Date(Date.now() - back * 24 * 60 * 60 * 1000);
+    total += data[todayKey(d)]?.[appId] ?? 0;
+  }
+  return total;
+}
+
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function addUsageSeconds(appId: UsageAppId, seconds: number): void {

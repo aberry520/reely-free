@@ -40,6 +40,7 @@ export function buildInstagramScript(settings: FilterSettings): string {
     hideExplore: settings.igHideExplore,
     blockSuggested: settings.igHideSuggested,
     blockAppPromo: settings.igBlockAppPromo,
+    brandHeader: settings.igBrandHeader,
   });
   const logo = JSON.stringify(LOGO_FULL_DATA_URI);
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
@@ -266,6 +267,36 @@ export function buildInstagramScript(settings: FilterSettings): string {
       } catch (e) {}
     }, true);
   } catch (e) {}
+  // Branded header (Austin's ask, 2026-11-23): the Instagram
+  // wordmark in the top bar is swapped for the Reely Free mark.
+  // The link itself is untouched, so tapping it still goes home,
+  // and the heart / messenger icons beside it are untouched.
+  // The bottom nav's home tab is also an a[href="/"], but it sits
+  // near the bottom of the screen, so the top-90px gate excludes it.
+  function brandHeaderLogo() {
+    try {
+      if (!S.brandHeader) return;
+      var links = document.querySelectorAll('a[href="/"]');
+      for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+        if (link.getAttribute('data-rf-logo')) continue;
+        var r = link.getBoundingClientRect();
+        if (r.top < 0 || r.top > 90) continue;
+        if (r.width < 20 || r.width > 220) continue;
+        if (r.height < 20 || r.height > 60) continue;
+        if (!link.querySelector('svg, img')) continue;
+        while (link.firstChild) link.removeChild(link.firstChild);
+        var img = document.createElement('img');
+        img.src = MARK;
+        img.alt = 'Reely Free';
+        img.style.cssText =
+          'height:28px;width:28px;border-radius:7px;display:block;';
+        link.appendChild(img);
+        link.setAttribute('data-rf-logo', '1');
+        return;
+      }
+    } catch (e) {}
+  }
   function apply() {
     try {
       var path = location.pathname;
@@ -275,6 +306,7 @@ export function buildInstagramScript(settings: FilterSettings): string {
         location.replace('/');
         return;
       }
+      brandHeaderLogo();
       // Explore: the page stays (Search lives there) — a cover sits
       // over the browse grid, on the plain Explore page only, never
       // on search results. Anywhere else the cover is removed.

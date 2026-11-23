@@ -15,6 +15,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     hideUpNext: settings.ytHideUpNext,
     blockAppPromo: settings.ytBlockAppPromo,
     swipeDownBack: settings.ytSwipeDownBack,
+    brandHeader: settings.ytBrandHeader,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
@@ -91,6 +92,37 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     }
     hide(node);
   }
+  // Branded header (Austin's ask, 2026-11-23): the YouTube logo
+  // in the top bar is swapped for the Reely Free mark. The link
+  // itself is untouched, so tapping it still goes home; the
+  // search and avatar controls beside it are untouched. The
+  // bottom pivot bar's Home item is also an a[href="/"], but it
+  // sits near the bottom of the screen, so the top-90px gate
+  // excludes it.
+  function brandHeaderLogo() {
+    try {
+      if (!S.brandHeader) return;
+      var links = document.querySelectorAll('a[href="/"]');
+      for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+        if (link.getAttribute('data-rf-logo')) continue;
+        var r = link.getBoundingClientRect();
+        if (r.top < 0 || r.top > 90) continue;
+        if (r.width < 20 || r.width > 220) continue;
+        if (r.height < 20 || r.height > 60) continue;
+        if (!link.querySelector('svg, img, yt-icon')) continue;
+        while (link.firstChild) link.removeChild(link.firstChild);
+        var img = document.createElement('img');
+        img.src = MARK;
+        img.alt = 'Reely Free';
+        img.style.cssText =
+          'height:24px;width:24px;border-radius:6px;display:block;';
+        link.appendChild(img);
+        link.setAttribute('data-rf-logo', '1');
+        return;
+      }
+    } catch (e) {}
+  }
   function apply() {
     try {
       var path = location.pathname;
@@ -98,6 +130,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
         var m = path.match(/^\\/shorts\\/([\\w-]{6,})/);
         if (m) { location.replace('/watch?v=' + m[1]); return; }
       }
+      brandHeaderLogo();
       if (S.landOnSubs && path === '/') {
         location.replace('/feed/subscriptions');
         return;
