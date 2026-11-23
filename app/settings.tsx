@@ -48,6 +48,19 @@ const LIMIT_OPTIONS = [
   { v: 240, l: '4h' },
 ];
 
+// What two quick taps on the floating Reely Free button do
+// (Austin's ask, 2026-11-23). None = no double-tap action.
+const DOUBLE_TAP_OPTIONS: {
+  v: FilterSettings['hubDoubleTap'];
+  l: string;
+}[] = [
+  { v: 'none', l: 'None' },
+  { v: 'back', l: 'Back' },
+  { v: 'home', l: 'Home' },
+  { v: 'settings', l: 'Settings' },
+  { v: 'lastDoor', l: 'Last door' },
+];
+
 // The daily-usage rows at the foot of each app's block (Austin's
 // ask, 2026-11-23): today's time in that door, a chip row to set
 // the daily limit, and the lock/warn choice for what happens at
@@ -532,6 +545,47 @@ export default function SettingsScreen() {
             value={settings.navBackButton}
             onChange={set('navBackButton')}
           />
+          <View style={[styles.row, { borderBottomColor: theme.border }]}>
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: theme.text }]}>
+                Double-tap floating button
+              </Text>
+              <Text style={[styles.rowDetail, { color: theme.muted }]}>
+                What two quick taps on the Reely Free button do. A
+                single tap still opens the menu. Last door jumps back
+                to the door you were in before this one.
+              </Text>
+              <View style={styles.chipRow}>
+                {DOUBLE_TAP_OPTIONS.map((o) => {
+                  const active = settings.hubDoubleTap === o.v;
+                  return (
+                    <Pressable
+                      key={o.v}
+                      onPress={() => update({ hubDoubleTap: o.v })}
+                      style={[
+                        styles.chip,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor: active
+                            ? theme.accent
+                            : theme.surface,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: active ? '#fff' : theme.text },
+                        ]}
+                      >
+                        {o.l}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
         </>
       )}
 

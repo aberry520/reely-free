@@ -125,6 +125,10 @@ const APPS: {
 
 const BTN = 50;
 const BTN_POS_KEY = 'reelyfree-homebtn-v1';
+// The door visited before this one (Austin's "last door"
+// double-tap, 2026-11-23): the previous door's route, kept in
+// storage so it survives app restarts.
+const LAST_DOOR_KEY = 'reelyfree-last-door-v1';
 
 // Daily usage limits (Austin's ask, 2026-11-23): which settings keys
 // govern each door's limit — minutes per day (0 = no limit) and
@@ -372,7 +376,9 @@ export default function SiteBrowser({
   }, []);
 
   // A tap on the floating control fans out its satellites (it used
-  // to take a long-press; Austin asked for tap, 2026-11-23).
+  // to take a long-press; Austin asked for tap, 2026-11-23). A
+  // double-tap runs the action picked in Settings (none by
+  // default); see the double-tap block just above the pan handler.
   // hubPos snapshots the button's spot when the fan opens, so the
   // satellites anchor to where the button actually is.
   const [expanded, setExpanded] = useState(false);
@@ -390,14 +396,79 @@ export default function SiteBrowser({
     expandedRef.current = false;
     setExpanded(false);
   };
+  // --- Double-tap action on the floating button ---------------------
+  // Austin's ask, 2026-11-23: two quick taps run a chosen action
+  // (Settings > Getting Home > Double-tap floating button). The
+  // pan handlers are memoized once, so everything they read lives
+  // in refs that stay current.
+  const lastDoorRef = useRef<string | null>(null);
+  const hubDoubleTapRef = useRef(settings.hubDoubleTap);
+  useEffect(() => {
+    hubDoubleTapRef.current = settings.hubDoubleTap;
+  }, [settings.hubDoubleTap]);
+  const canGoBackRef = useRef(false);
+  useEffect(() => {
+    canGoBackRef.current = canGoBack;
+  }, [canGoBack]);
+  const doubleTapActionRef = useRef(() => {});
+  doubleTapActionRef.current = () => {
+    switch (hubDoubleTapRef.current) {
+      case 'back':
+        if (canGoBackRef.current) webRef.current?.goBack();
+        break;
+      case 'home':
+        goHome();
+        break;
+      case 'settings':
+        router.navigate('/settings');
+        break;
+      case 'lastDoor':
+        if (lastDoorRef.current) router.replace(lastDoorRef.current);
+        break;
+      default:
+        break;
+    }
+  };
+  // Remember this door as the last one visited, and keep the
+  // previous door's route for the double-tap jump.
+  useEffect(() => {
+    const myRoute = APPS.find((a) => a.id === appId)?.route ?? null;
+    AsyncStorage.getItem(LAST_DOOR_KEY)
+      .then((prev) => {
+        if (prev && prev !== myRoute) lastDoorRef.current = prev;
+        if (myRoute) return AsyncStorage.setItem(LAST_DOOR_KEY, myRoute);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A pending single tap waits 300ms to see whether a second tap
+  // follows; those timers are armed in the pan release handler.
+  const lastTapRef = useRef(0);
+  const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (pendingTapRef.current) clearTimeout(pendingTapRef.current);
+    },
+    [],
+  );
   const btnPan = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           dragStartRef.current = { ...posRef.current };
+          // A press that follows a tap cancels that tap's wait
+          // for a second tap — it belongs to the new gesture.
+          if (pendingTapRef.current) {
+            clearTimeout(pendingTapRef.current);
+            pendingTapRef.current = null;
+          }
           collapseOnlyRef.current = expandedRef.current;
-          if (expandedRef.current) closeFan();
+          if (expandedRef.current) {
+            closeFan();
+            // Closing the fan isn't the first tap of a double.
+            lastTapRef.current = 0;
+          }
         },
         onPanResponderMove: (_, g) => {
           pan.setValue({
@@ -411,11 +482,37 @@ export default function SiteBrowser({
             return;
           }
           if (Math.hypot(g.dx, g.dy) < 8) {
-            // A tap opens the fan. (A tap that started on an open
-            // fan was already handled at grant time — it only
-            // collapses, via collapseOnlyRef above.)
-            setHubPos({ ...posRef.current });
-            openFan();
+            // A tap. (A tap that started on an open fan was
+            // already handled at grant time — it only collapses,
+            // via collapseOnlyRef above.)
+            if (hubDoubleTapRef.current === 'none') {
+              // No double-tap action configured: the fan opens
+              // at once, no waiting.
+              lastTapRef.current = 0;
+              setHubPos({ ...posRef.current });
+              openFan();
+              return;
+            }
+            const now = Date.now();
+            if (now - lastTapRef.current < 300) {
+              // Second tap inside the window: run the chosen
+              // action instead of opening the fan.
+              lastTapRef.current = 0;
+              if (pendingTapRef.current) {
+                clearTimeout(pendingTapRef.current);
+                pendingTapRef.current = null;
+              }
+              doubleTapActionRef.current();
+              return;
+            }
+            // First tap: wait a beat for a second one before
+            // opening the fan.
+            lastTapRef.current = now;
+            pendingTapRef.current = setTimeout(() => {
+              pendingTapRef.current = null;
+              setHubPos({ ...posRef.current });
+              openFan();
+            }, 300);
             return;
           }
           const movedX = dragStartRef.current.x + g.dx;

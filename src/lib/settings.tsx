@@ -86,6 +86,11 @@ export interface FilterSettings {
   navLeftEdge: boolean;
   navRightEdge: boolean;
   navBackButton: boolean;
+  // What a double-tap on the floating button does (Austin's ask,
+  // 2026-11-23): 'none' = no double-tap action (a double tap just
+  // opens then closes the fan, as before). 'lastDoor' = the door
+  // you were in before this one.
+  hubDoubleTap: 'none' | 'back' | 'home' | 'settings' | 'lastDoor';
 }
 
 export const DEFAULT_SETTINGS: FilterSettings = {
@@ -133,6 +138,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   navLeftEdge: true,
   navRightEdge: true,
   navBackButton: true,
+  hubDoubleTap: 'none',
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';
