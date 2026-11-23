@@ -40,7 +40,15 @@ export function buildMarketplaceGuestScript(
       if (document.getElementById('rf-guest-style')) return;
       var st = document.createElement('style');
       st.id = 'rf-guest-style';
-      st.textContent = '[data-rf-hidden]{display:none !important;}';
+      st.textContent =
+        '[data-rf-hidden]{display:none !important;}' +
+        // The modal's other half: Facebook locks page scroll while a
+        // dialog is up (overflow hidden / fixed body), and the lock
+        // outlived the hidden dialog — grey gone, page still frozen
+        // (his report, 2026-11-23 10:24). Removing the inline lock in
+        // JS races Facebook re-adding it; a stylesheet !important rule
+        // wins permanently, for as long as this door is open.
+        'html,body{overflow:auto !important;position:static !important;touch-action:auto !important;}';
       (document.head || document.documentElement).appendChild(st);
     } catch (e) {}
   }
@@ -288,6 +296,58 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // Probe what is ACTUALLY on top (same frozen report): instead of
+  // guessing the blocker's shape, ask the browser which element a tap
+  // at several screen points would hit. If that element lives inside a
+  // full-screen fixed/absolute layer that holds no visible content and
+  // no listing links, that layer is the blocker — mark it hidden. A
+  // healthy page answers with listing content in normal flow (no such
+  // layer above it), and a real overlay like the photo viewer holds
+  // visible controls/media, so both are left alone.
+  function probeBlockers() {
+    try {
+      var points = [
+        [0.5, 0.35], [0.5, 0.65], [0.25, 0.5], [0.75, 0.5],
+      ];
+      for (var p = 0; p < points.length; p++) {
+        var el = document.elementFromPoint(
+          Math.floor(window.innerWidth * points[p][0]),
+          Math.floor(window.innerHeight * points[p][1])
+        );
+        if (!el || el === document.documentElement || el === document.body) continue;
+        var anc = el;
+        var guard = 0;
+        while (anc && anc !== document.body && guard < 16) {
+          guard++;
+          if (anc.getAttribute && anc.getAttribute('data-rf-hidden')) break;
+          var pos = '';
+          try { pos = window.getComputedStyle(anc).position; } catch (e) {}
+          if (pos === 'fixed' || pos === 'absolute') {
+            var r = anc.getBoundingClientRect();
+            if (r.width >= window.innerWidth * 0.95 &&
+                r.height >= window.innerHeight * 0.95) {
+              if (isListingHolder(anc)) break;
+              var text = '';
+              try { text = (anc.innerText || '').trim(); } catch (e) {}
+              var content = anc.querySelectorAll(
+                'a, button, input, select, textarea, [role="button"], [role="link"], img, video, iframe'
+              );
+              var hasVisible = false;
+              for (var k = 0; k < content.length; k++) {
+                if (isEffectivelyVisible(content[k])) { hasVisible = true; break; }
+              }
+              if (!hasVisible && text.length === 0) {
+                anc.setAttribute('data-rf-hidden', '1');
+                anc.style.setProperty('display', 'none', 'important');
+              }
+              break;
+            }
+          }
+          anc = anc.parentElement;
+        }
+      }
+    } catch (e) {}
+  }
   function apply() {
     ensureStyle();
     if (S.dismissLogin) {
@@ -297,7 +357,10 @@ export function buildMarketplaceGuestScript(
       hideBottomLoginBar();
       hideLoginPanel();
     }
-    if (S.dismissLogin || S.blockLoginBar) hideOrphanBackdrops();
+    if (S.dismissLogin || S.blockLoginBar) {
+      hideOrphanBackdrops();
+      probeBlockers();
+    }
     unlockScroll();
   }
   apply();
