@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ScrollView,
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import type { FilterSettings } from '../src/lib/settings';
@@ -32,59 +31,6 @@ function ToggleRow({
         </Text>
       </View>
       <Switch value={value} onValueChange={onChange} />
-    </View>
-  );
-}
-
-function TextRow({
-  label,
-  detail,
-  value,
-  onSave,
-  keyboardType,
-  autoCapitalize,
-}: {
-  label: string;
-  detail: string;
-  value: string;
-  onSave: (v: string) => void;
-  keyboardType?: 'default' | 'number-pad';
-  autoCapitalize?: 'none' | 'words';
-}) {
-  const theme = useTheme();
-  const [draft, setDraft] = useState(value);
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-  const save = () => {
-    if (draft !== value) onSave(draft.trim());
-  };
-  return (
-    <View style={[styles.row, { borderBottomColor: theme.border }]}>
-      <View style={styles.rowText}>
-        <Text style={[styles.rowLabel, { color: theme.text }]}>{label}</Text>
-        <Text style={[styles.rowDetail, { color: theme.muted }]}>
-          {detail}
-        </Text>
-      </View>
-      <TextInput
-        style={[
-          styles.textInput,
-          {
-            color: theme.text,
-            borderColor: theme.border,
-            backgroundColor: theme.background,
-          },
-        ]}
-        value={draft}
-        onChangeText={setDraft}
-        onEndEditing={save}
-        onSubmitEditing={save}
-        keyboardType={keyboardType ?? 'default'}
-        autoCapitalize={autoCapitalize ?? 'none'}
-        autoCorrect={false}
-        returnKeyType="done"
-      />
     </View>
   );
 }
@@ -180,27 +126,6 @@ export default function SettingsScreen() {
         value={settings.mpGuestBlockLoginBar}
         onChange={set('mpGuestBlockLoginBar')}
       />
-      <ToggleRow
-        label="Use my location"
-        detail="The guest door opens with no location set, so Facebook uses the location it detects for your device — the way it already found Iva on its own. Turn this off to browse the city typed below instead."
-        value={settings.mpGuestUseMyLocation}
-        onChange={set('mpGuestUseMyLocation')}
-      />
-      <TextRow
-        label="Guest location"
-        detail="Only used when 'Use my location' is off. A city name, not a ZIP (Facebook's location links use city names). Applies the next time you open the door."
-        value={settings.mpGuestLocation}
-        onSave={(v) => update({ mpGuestLocation: v })}
-        autoCapitalize="words"
-      />
-      <TextRow
-        label="Guest radius (miles)"
-        detail="Only used when 'Use my location' is off. How far around that city the guest door asks Marketplace to show. Applies the next time you open the door."
-        value={settings.mpGuestRadiusMiles}
-        onSave={(v) => update({ mpGuestRadiusMiles: v })}
-        keyboardType="number-pad"
-      />
-
       <Text style={[styles.section, { color: theme.text }]}>Getting home</Text>
       <ToggleRow
         label="Floating home button"
@@ -259,15 +184,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowText: { flex: 1, paddingRight: 12 },
-  textInput: {
-    width: 110,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 15,
-    textAlign: 'right',
-  },
   rowLabel: { fontSize: 16, fontWeight: '600' },
   rowDetail: { fontSize: 13, marginTop: 3, lineHeight: 18 },
   note: { fontSize: 13, marginTop: 24, lineHeight: 19 },

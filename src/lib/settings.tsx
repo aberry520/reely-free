@@ -24,23 +24,14 @@ export interface FilterSettings {
   fbHideSponsored: boolean;
   fbBlockAppPromo: boolean;
   fbStickyHeader: boolean;
-  // Guest Marketplace (experimental desktop door)
+  // Guest Marketplace (experimental desktop door). No location settings
+  // on purpose (his decision, 2026-11-23): typed city/radius fields and
+  // then a "use my location" toggle both failed to move Facebook, which
+  // detects location itself (it found Iva, SC from his IP) and does a
+  // good job of it — anyone who wants somewhere else can change it
+  // inside Marketplace's own location dialog.
   mpGuestDismissLogin: boolean;
   mpGuestBlockLoginBar: boolean;
-  // Where the guest door opens: a city name (turned into Facebook's
-  // location slug in the URL) and a radius in miles, as he asked
-  // (2026-11-23). Stored as text — the Settings fields are text inputs.
-  mpGuestLocation: string;
-  mpGuestRadiusMiles: string;
-  // His pick (2026-11-23): a "use my location" toggle instead of relying
-  // on the typed fields. On = the guest door opens with no location in
-  // the URL at all, so Facebook uses the location it detects for the
-  // device (his screenshot showed it detecting Iva, SC from the IP
-  // address, with its own radius). The typed fields only apply when
-  // this is off — e.g. browsing a different city on purpose. Facebook
-  // overrode the typed slug/radius for a logged-out session, which is
-  // why the fields "didn't work".
-  mpGuestUseMyLocation: boolean;
   // Ways to get back home from a site screen (Austin's picks, 2026-11-22)
   navButton: boolean;
   navBottomSwipe: boolean;
@@ -62,11 +53,6 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   fbStickyHeader: true,
   mpGuestDismissLogin: true,
   mpGuestBlockLoginBar: true,
-  // Anderson is his confirmed home turf (MAC.BID warehouse, near Iva, SC);
-  // 40 miles is Facebook's own default radius. Both are his to change.
-  mpGuestLocation: 'Anderson',
-  mpGuestRadiusMiles: '40',
-  mpGuestUseMyLocation: true,
   // Bottom swipe defaults OFF: iOS grabs the whole bottom edge for its own
   // home gesture, so it was inconsistent in his on-device test. The other
   // three default on.
