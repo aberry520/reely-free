@@ -6,9 +6,14 @@ stack as Reseller HQ.
 
 - **YouTube**: no Shorts (shelves, button, search results), lands on
   Subscriptions instead of the recommendation feed, no Up Next rail. A
-  Shorts link someone sends opens as a normal watch page.
-- **Facebook**: no Reels, no "Suggested for you" posts, no sponsored posts.
-  Feed, groups and **Marketplace** stay. Messenger stays in its own app.
+  Shorts link someone sends opens as a normal watch page. The "Get the best
+  experience" app popup and the header's Open App button are hidden too.
+- **Facebook**: no Reels, no "Suggested for you" posts, no sponsored posts,
+  and the "Open app" bar at the bottom of the feed is hidden. Feed, groups
+  and **Marketplace** stay. Messenger stays in its own app.
+- Links that try to open the real apps (fb://, youtube://, App Store) are
+  refused by the WebView itself, so a banner that slips past a filter still
+  can't kick him out of the app.
 - **Settings**: per-platform toggles, saved on the device.
 - **Feel**: the app follows the phone's light/dark setting (the sites do
   too). Facebook and YouTube open full-screen — no header, no toolbar. Four

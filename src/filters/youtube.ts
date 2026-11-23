@@ -10,6 +10,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     blockShorts: settings.ytBlockShorts,
     landOnSubs: settings.ytLandOnSubs,
     hideUpNext: settings.ytHideUpNext,
+    blockAppPromo: settings.ytBlockAppPromo,
   });
 
   return `
@@ -63,6 +64,36 @@ export function buildYouTubeScript(settings: FilterSettings): string {
         for (var n = 0; n < sections.length; n++) {
           var head = (sections[n].textContent || '').trim().slice(0, 40);
           if (head.indexOf('Up next') === 0) hide(sections[n]);
+        }
+      }
+      if (S.blockAppPromo) {
+        // The 'Open App' pill in the header, and the 'Watch in YouTube app'
+        // call-to-action inside the promo popup (hide its whole card).
+        var btns = document.querySelectorAll('a, button, [role="button"]');
+        for (var b = 0; b < btns.length; b++) {
+          var t = (btns[b].textContent || '').trim();
+          if (t === 'Open App' || t === 'Open app') {
+            var wrap = btns[b].parentElement;
+            hide(wrap && wrap.children.length === 1 ? wrap : btns[b]);
+          } else if (t === 'Watch in YouTube app') {
+            hideCard(btns[b]);
+          }
+        }
+        // The 'Get the best experience' promo dialog itself; also release
+        // the scroll lock YouTube puts on the page while it is up.
+        var dialogs = document.querySelectorAll(
+          '[role="dialog"], [role="alertdialog"], ' +
+          'ytm-app-promo-dialog-renderer, ytm-dialog-renderer');
+        for (var d = 0; d < dialogs.length; d++) {
+          var dt = dialogs[d].textContent || '';
+          if (dt.indexOf('Get the best experience') >= 0 ||
+              dt.indexOf('Watch in YouTube app') >= 0) {
+            hide(dialogs[d]);
+            try {
+              document.body.style.overflow = '';
+              document.documentElement.style.overflow = '';
+            } catch (e) {}
+          }
         }
       }
     } catch (e) {}

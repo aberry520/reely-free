@@ -11,6 +11,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
     blockReels: settings.fbBlockReels,
     hideSuggested: settings.fbHideSuggested,
     hideSponsored: settings.fbHideSponsored,
+    blockAppPromo: settings.fbBlockAppPromo,
   });
 
   return `
@@ -32,6 +33,23 @@ export function buildFacebookScript(settings: FilterSettings): string {
       if (links <= 4) best = el; else break;
     }
     hide(best);
+  }
+  // Hide the full-width bar a get-the-app button sits in (the 'Open app'
+  // bar fixed to the bottom of the feed): climb while ancestors stay
+  // short and nearly full-width.
+  function hideBar(node) {
+    var candidate = node, el = node, depth = 0;
+    while (el && depth < 6) {
+      el = el.parentElement; depth++;
+      if (!el) break;
+      if (el.clientWidth >= window.innerWidth * 0.9 &&
+          el.clientHeight > 0 && el.clientHeight <= 160) {
+        candidate = el;
+      } else if (el.clientHeight > 160) {
+        break;
+      }
+    }
+    hide(candidate);
   }
   function apply() {
     try {
@@ -71,6 +89,24 @@ export function buildFacebookScript(settings: FilterSettings): string {
         var reelLinks = document.querySelectorAll('a[href*="/reel/"]');
         for (var k = 0; k < reelLinks.length; k++) {
           if (!reelLinks[k].getAttribute('data-rf-hidden')) hideCard(reelLinks[k]);
+        }
+      }
+      // The 'Open app' bar and other get-the-app banners: find the
+      // innermost element carrying one of the known labels and hide the
+      // bar it sits in.
+      if (S.blockAppPromo) {
+        var ctas = document.querySelectorAll('a, button, [role="button"], div, span');
+        for (var c = 0; c < ctas.length; c++) {
+          var cel = ctas[c];
+          if (cel.getAttribute('data-rf-hidden')) continue;
+          var ctext = (cel.textContent || '').trim();
+          if (ctext !== 'Open app' && ctext !== 'Open App' &&
+              ctext !== 'Get the app' && ctext !== 'Use the app') continue;
+          // Innermost match only, and plausibly a button (short, not a
+          // whole post that happens to contain the words).
+          if (cel.querySelector && cel.querySelector('a, button, [role="button"], div, span')) continue;
+          if (cel.clientHeight > 90) continue;
+          hideBar(cel);
         }
       }
     } catch (e) {}

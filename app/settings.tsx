@@ -66,6 +66,12 @@ export default function SettingsScreen() {
         value={settings.ytHideUpNext}
         onChange={set('ytHideUpNext')}
       />
+      <ToggleRow
+        label="Block app popups"
+        detail="Hides the 'Get the best experience' popup and the Open App button in the header."
+        value={settings.ytBlockAppPromo}
+        onChange={set('ytBlockAppPromo')}
+      />
 
       <Text style={[styles.section, { color: theme.text }]}>Facebook</Text>
       <ToggleRow
@@ -85,6 +91,12 @@ export default function SettingsScreen() {
         detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
         value={settings.fbHideSponsored}
         onChange={set('fbHideSponsored')}
+      />
+      <ToggleRow
+        label="Block 'Open app' bar"
+        detail="Hides the Open app bar at the bottom of the feed and similar get-the-app banners."
+        value={settings.fbBlockAppPromo}
+        onChange={set('fbBlockAppPromo')}
       />
 
       <Text style={[styles.section, { color: theme.text }]}>Getting home</Text>

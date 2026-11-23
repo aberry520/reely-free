@@ -216,6 +216,22 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
         pullToRefreshEnabled
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
+        setSupportMultipleWindows={false}
+        onShouldStartLoadWithRequest={(req) => {
+          // Nothing leaves the app: app schemes (fb://, youtube://,
+          // intent:, …) and app-store links are refused outright, so even
+          // a get-the-app banner that slips past the filter can't kick
+          // him out to the real Facebook/YouTube app.
+          const url = req.url;
+          if (url === 'about:blank') return true;
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            return !(
+              url.includes('apps.apple.com') ||
+              url.includes('play.google.com')
+            );
+          }
+          return false;
+        }}
         startInLoadingState
         renderLoading={() => (
           <View
