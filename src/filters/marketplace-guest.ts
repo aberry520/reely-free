@@ -109,10 +109,56 @@ export function buildMarketplaceGuestScript(
         var hasPassword = d.querySelector
           ? d.querySelector('input[type="password"]')
           : null;
-        if (!hasPassword) continue;
+        // The scroll-depth wall (his first recording, rewatched
+        // 2026-11-23 10:43): after ~24 listings a white wash fades in
+        // and the page freezes mid-feed, well before any result cap.
+        // That wall is a dialog with Log In / Create new account
+        // BUTTONS and no password field at all, so the password-only
+        // signature missed it cycle after cycle — the dialog never
+        // stayed marked, and its backdrop never qualified for the
+        // orphan sweep. Accept the button signature too: login wording
+        // plus a create-account control, and never a listing holder.
+        // (The Change location dialog has neither, so it stays usable.)
+        var isWall = !!hasPassword;
+        if (!isWall && d.querySelectorAll) {
+          var dtext = d.textContent || '';
+          var hasCreate = false;
+          var ctrls = d.querySelectorAll('a, button, [role="button"]');
+          for (var ci = 0; ci < ctrls.length; ci++) {
+            var ct = (ctrls[ci].textContent || '').trim();
+            if (ct === 'Create new account' || ct === 'Create account') {
+              hasCreate = true;
+              break;
+            }
+          }
+          isWall = hasCreate &&
+            (dtext.indexOf('Log in') >= 0 || dtext.indexOf('Log In') >= 0);
+        }
+        if (!isWall) continue;
         if (isListingHolder(d)) continue;
         d.setAttribute('data-rf-hidden', '1');
         d.style.setProperty('display', 'none', 'important');
+        // Kill the wall's whole modal root, not just the dialog:
+        // Facebook appends the modal as a direct child of body, with
+        // the backdrop as the dialog's sibling inside that root. The
+        // earlier rounds hid the dialog and hunted the backdrop by
+        // shape, and the wash still survived — hiding the root takes
+        // dialog, backdrop and any wrapper in one shot. The app's own
+        // root is safe: it holds the listing links, and a root holding
+        // listings is never marked.
+        try {
+          var root = d;
+          while (root.parentElement &&
+                 root.parentElement !== document.body &&
+                 root.parentElement !== document.documentElement) {
+            root = root.parentElement;
+          }
+          if (root && root !== d && root.parentElement === document.body &&
+              !isListingHolder(root)) {
+            root.setAttribute('data-rf-hidden', '1');
+            root.style.setProperty('display', 'none', 'important');
+          }
+        } catch (e) {}
         // Hide a dimmed backdrop sibling if one was left behind.
         var parent = d.parentElement;
         if (parent && !isListingHolder(parent)) {
@@ -348,6 +394,34 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // The stylesheet unlock covers html/body, but desktop Facebook
+  // scrolls inside a container div, and the modal lock can land on
+  // THAT element instead — overflow-y hidden on the one box that
+  // actually scrolls, which the html/body rule never reaches. Release
+  // any large element that is locked while holding more content than
+  // it shows. Legit overflow-hidden boxes (carousels, cropped media)
+  // are small or hold no excess vertical content, so they are left
+  // alone; a hidden wall root is skipped via its marker.
+  function releaseScrollLocks() {
+    try {
+      var els = document.querySelectorAll('div, section, main');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.getAttribute('data-rf-hidden')) continue;
+        if (el.closest && el.closest('[data-rf-hidden]')) continue;
+        if (el.getAttribute('data-rf-scrollfree')) continue;
+        var oy = '';
+        try { oy = window.getComputedStyle(el).overflowY; } catch (e) {}
+        if (oy !== 'hidden') continue;
+        if (el.scrollHeight <= el.clientHeight + 24) continue;
+        var r = el.getBoundingClientRect();
+        if (r.height < window.innerHeight * 0.4) continue;
+        el.setAttribute('data-rf-scrollfree', '1');
+        el.style.setProperty('overflow-y', 'auto', 'important');
+        el.style.setProperty('overflow-x', 'hidden', 'important');
+      }
+    } catch (e) {}
+  }
   function apply() {
     ensureStyle();
     if (S.dismissLogin) {
@@ -360,6 +434,7 @@ export function buildMarketplaceGuestScript(
     if (S.dismissLogin || S.blockLoginBar) {
       hideOrphanBackdrops();
       probeBlockers();
+      releaseScrollLocks();
     }
     unlockScroll();
   }
@@ -373,6 +448,18 @@ export function buildMarketplaceGuestScript(
       }
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
+  // The scroll-depth wall fires WHILE scrolling, and attribute-only
+  // changes (a lock class landing on the scroller) do not trip the
+  // childList observer — re-check on scroll too, throttled.
+  var scrollPending = false;
+  try {
+    window.addEventListener('scroll', function () {
+      if (!scrollPending) {
+        scrollPending = true;
+        setTimeout(function () { scrollPending = false; apply(); }, 600);
+      }
+    }, true);
   } catch (e) {}
   setInterval(apply, 2500);
   true;
