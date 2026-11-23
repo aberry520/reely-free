@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import type { FilterSettings } from '../src/lib/settings';
 import { useSettings } from '../src/lib/settings';
+import { useTheme } from '../src/lib/theme';
 
 function ToggleRow({
   label,
@@ -20,11 +21,14 @@ function ToggleRow({
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const theme = useTheme();
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: theme.border }]}>
       <View style={styles.rowText}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowDetail}>{detail}</Text>
+        <Text style={[styles.rowLabel, { color: theme.text }]}>{label}</Text>
+        <Text style={[styles.rowDetail, { color: theme.muted }]}>
+          {detail}
+        </Text>
       </View>
       <Switch value={value} onValueChange={onChange} />
     </View>
@@ -33,14 +37,17 @@ function ToggleRow({
 
 export default function SettingsScreen() {
   const { settings, update } = useSettings();
+  const theme = useTheme();
   const set =
     (key: keyof FilterSettings) =>
     (v: boolean) =>
       update({ [key]: v });
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.section}>YouTube</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
+      <Text style={[styles.section, { color: theme.text }]}>YouTube</Text>
       <ToggleRow
         label="Block Shorts"
         detail="Hides Shorts shelves and the Shorts button. A Shorts link someone sends you opens as a normal video instead."
@@ -60,7 +67,7 @@ export default function SettingsScreen() {
         onChange={set('ytHideUpNext')}
       />
 
-      <Text style={styles.section}>Facebook</Text>
+      <Text style={[styles.section, { color: theme.text }]}>Facebook</Text>
       <ToggleRow
         label="Block Reels"
         detail="Hides Reels in the feed and Watch, and the shortcuts that lead to them."
@@ -80,20 +87,20 @@ export default function SettingsScreen() {
         onChange={set('fbHideSponsored')}
       />
 
-      <Text style={styles.note}>
+      <Text style={[styles.note, { color: theme.muted }]}>
         Changes apply the next time you open Facebook or YouTube. Marketplace
-        is never filtered, and Messenger stays in its own app.
+        is never filtered, and Messenger stays in its own app. The app follows
+        your phone's light/dark setting automatically.
       </Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 20 },
+  container: { flex: 1, paddingHorizontal: 20 },
   section: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111',
     marginTop: 24,
     marginBottom: 8,
   },
@@ -102,10 +109,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
   },
   rowText: { flex: 1, paddingRight: 12 },
-  rowLabel: { fontSize: 16, fontWeight: '600', color: '#111' },
-  rowDetail: { fontSize: 13, color: '#555', marginTop: 3, lineHeight: 18 },
-  note: { fontSize: 13, color: '#777', marginTop: 24, lineHeight: 19 },
+  rowLabel: { fontSize: 16, fontWeight: '600' },
+  rowDetail: { fontSize: 13, marginTop: 3, lineHeight: 18 },
+  note: { fontSize: 13, marginTop: 24, lineHeight: 19 },
 });

@@ -10,6 +10,10 @@ stack as Reseller HQ.
 - **Facebook**: no Reels, no "Suggested for you" posts, no sponsored posts.
   Feed, groups and **Marketplace** stay. Messenger stays in its own app.
 - **Settings**: per-platform toggles, saved on the device.
+- **Feel**: the app follows the phone's light/dark setting (the sites do
+  too). Facebook and YouTube open full-screen — no header, no toolbar — and
+  a swipe up on the bar at the bottom center (same motion as the iPhone home
+  gesture) goes back to the app's home screen. A tap on the bar works too.
 
 The filters are injected JavaScript (`src/filters/`) that target stable
 hooks — URLs, element tags, visible label text — not class names, and

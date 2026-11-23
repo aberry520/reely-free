@@ -2,18 +2,25 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../src/lib/theme';
 
 // Home: two doors. Facebook and YouTube, minus the parts designed to keep
 // him scrolling. Marketplace stays — he sells there. Messenger stays in its
-// own app, by his choice.
+// own app, by his choice. Colors follow the phone's light/dark setting.
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 24 }]}>
-      <Text style={styles.title}>Reely Free</Text>
-      <Text style={styles.subtitle}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top + 24, backgroundColor: theme.background },
+      ]}
+    >
+      <Text style={[styles.title, { color: theme.text }]}>Reely Free</Text>
+      <Text style={[styles.subtitle, { color: theme.muted }]}>
         Facebook and YouTube, without the hooks.
       </Text>
 
@@ -42,16 +49,18 @@ export default function HomeScreen() {
         style={styles.settingsButton}
         onPress={() => router.push('/settings')}
       >
-        <Text style={styles.settingsText}>Settings</Text>
+        <Text style={[styles.settingsText, { color: theme.accent }]}>
+          Settings
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20, backgroundColor: '#fff' },
-  title: { fontSize: 32, fontWeight: '800', color: '#111' },
-  subtitle: { fontSize: 16, color: '#555', marginTop: 6, marginBottom: 28 },
+  container: { flex: 1, paddingHorizontal: 20 },
+  title: { fontSize: 32, fontWeight: '800' },
+  subtitle: { fontSize: 16, marginTop: 6, marginBottom: 28 },
   card: {
     borderRadius: 14,
     padding: 20,
@@ -67,5 +76,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
-  settingsText: { fontSize: 16, color: '#0a5cff', fontWeight: '600' },
+  settingsText: { fontSize: 16, fontWeight: '600' },
 });
