@@ -164,7 +164,7 @@ export default function SettingsScreen() {
 
       <FeatureHeader
         title="Guest Marketplace"
-        detail="The 'Marketplace — no account' door. Off = that door and the guest search leave the home screen entirely."
+        detail="The 'Marketplace — no account' door. Off = that door leaves the home screen entirely."
         value={settings.featureGuestMarketplace}
         onChange={set('featureGuestMarketplace')}
       />

@@ -15,8 +15,7 @@ export interface FilterSettings {
   // Feature master toggles (Austin's ask, 2026-11-23): one switch per
   // feature at the top of its Settings section. Turning a feature off
   // hides its sub-toggles in Settings, removes its door from the home
-  // screen (the guest search launcher goes with the Marketplace card),
-  // AND switches the feature itself off — the filter script for that
+  // screen, AND switches the feature itself off — the filter script for that
   // door goes inert, and the Getting home aids all stand down (the
   // anti-stuck floating button still stays, per the long-standing
   // rule). Sub-toggle values are kept, so turning the feature back on

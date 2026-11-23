@@ -1,13 +1,6 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
@@ -18,98 +11,21 @@ import { useTheme } from '../src/lib/theme';
 // sells there. Messenger stays in its own app, by his choice. Colors
 // follow the phone's light/dark setting.
 //
-// Under the guest card sits the guest search launcher (his pick,
-// 2026-11-23). Facebook caps each logged-out pool — ~40 cards in the
-// feed, ~72 per search — but every distinct search is its own pool, so
-// the launcher opens the guest door on a search slice: the query plus a
-// price band and a sort. Stepping through the bands for one item steps
-// through separate pools, surfacing far more than any single search.
-const BANDS: { label: string; min?: string; max?: string }[] = [
-  { label: 'All prices' },
-  { label: 'Under $50', max: '50' },
-  { label: '$50–$150', min: '50', max: '150' },
-  { label: '$150–$400', min: '150', max: '400' },
-  { label: '$400+', min: '400' },
-];
-
-const SORTS: { label: string; value?: string }[] = [
-  { label: 'Best match' },
-  { label: 'Newest', value: 'creation_time_descend' },
-  { label: 'Price ↑', value: 'price_ascend' },
-  { label: 'Price ↓', value: 'price_descend' },
-];
-
-function ChipRow<T extends { label: string }>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: T[];
-  selected: number;
-  onSelect: (i: number) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={styles.chipRow}>
-      {options.map((o, i) => {
-        const on = i === selected;
-        return (
-          <Pressable
-            key={o.label}
-            onPress={() => onSelect(i)}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: on ? '#0f766e' : theme.surface,
-                borderColor: on ? '#0f766e' : theme.border,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                { color: on ? '#ffffff' : theme.text },
-              ]}
-            >
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
+// Feature masters (Settings): a disabled feature's door leaves the
+// home screen entirely. (A "Guest search" launcher card used to live
+// under the Marketplace door — query + price-band/sort slices to work
+// around Facebook's per-search guest cap. Austin removed it
+// 2026-11-23: the search inside the Marketplace door itself does the
+// same job, bands included, via its own filter panel.)
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  // Feature masters (Settings): a disabled feature's door leaves the
-  // home screen entirely — the guest search launcher goes with the
-  // Marketplace card, since it only exists to serve that door.
   const { settings } = useSettings();
   const anyDoor =
     settings.featureFacebook ||
     settings.featureYouTube ||
     settings.featureGuestMarketplace;
-  const [query, setQuery] = useState('');
-  const [band, setBand] = useState(0);
-  const [sort, setSort] = useState(0);
-
-  const runSearch = () => {
-    const q = query.trim();
-    if (!q) {
-      router.push('/marketplace');
-      return;
-    }
-    const params: Record<string, string> = { q };
-    const b = BANDS[band];
-    if (b.min) params.min = b.min;
-    if (b.max) params.max = b.max;
-    const s = SORTS[sort];
-    if (s.value) params.sort = s.value;
-    router.push({ pathname: '/marketplace', params });
-  };
 
   return (
     <ScrollView
@@ -163,51 +79,10 @@ export default function HomeScreen() {
       )}
 
       {!anyDoor && (
-        <Text style={[styles.launcherDetail, { color: theme.muted }]}>
+        <Text style={[styles.emptyNote, { color: theme.muted }]}>
           Every feature is turned off right now. Turn one back on in
           Settings and its door comes back here.
         </Text>
-      )}
-
-      {settings.featureGuestMarketplace && (
-      <View
-        style={[
-          styles.launcher,
-          { backgroundColor: theme.surface, borderColor: theme.border },
-        ]}
-      >
-        <Text style={[styles.launcherTitle, { color: theme.text }]}>
-          Guest search
-        </Text>
-        <Text style={[styles.launcherDetail, { color: theme.muted }]}>
-          Facebook shows a guest only so many results per search — but each
-          price band below is a separate batch. Step through the bands to
-          see more of the same item.
-        </Text>
-        <TextInput
-          style={[
-            styles.searchInput,
-            {
-              color: theme.text,
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-            },
-          ]}
-          value={query}
-          onChangeText={setQuery}
-          placeholder="What are you looking for?"
-          placeholderTextColor={theme.muted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          onSubmitEditing={runSearch}
-        />
-        <ChipRow options={BANDS} selected={band} onSelect={setBand} />
-        <ChipRow options={SORTS} selected={sort} onSelect={setSort} />
-        <Pressable style={styles.searchButton} onPress={runSearch}>
-          <Text style={styles.searchButtonText}>Search as guest</Text>
-        </Pressable>
-      </View>
       )}
 
       <Pressable
@@ -236,44 +111,7 @@ const styles = StyleSheet.create({
   marketplaceCard: { backgroundColor: '#0f766e' },
   cardTitle: { fontSize: 22, fontWeight: '700', color: '#fff' },
   cardDetail: { fontSize: 14, color: '#eef', marginTop: 6, lineHeight: 20 },
-  launcher: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
-  },
-  launcherTitle: { fontSize: 17, fontWeight: '700' },
-  launcherDetail: { fontSize: 13, marginTop: 4, lineHeight: 18 },
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    marginTop: 12,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 10,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  chipText: { fontSize: 13, fontWeight: '600' },
-  searchButton: {
-    backgroundColor: '#0f766e',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  searchButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptyNote: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
   settingsButton: {
     marginTop: 8,
     alignSelf: 'center',
