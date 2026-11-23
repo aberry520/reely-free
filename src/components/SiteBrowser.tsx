@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -90,10 +90,14 @@ const BTN_POS_KEY = 'reelyfree-homebtn-v1';
 // - left-edge swipe: the stack's built-in iOS back gesture (see _layout)
 // - right-edge swipe: a thin zone on the right edge, swipe left to go home
 // - bottom swipe: a bar at the bottom center (iOS often steals this one)
-// - the translucent floating home button: draggable anywhere, snaps to the
-//   nearest side, remembers its spot across all doors; a tap goes home,
-//   a long-press opens the app switcher (jump straight to another
-//   enabled door)
+// - the translucent floating control: draggable anywhere, snaps to the
+//   nearest side, remembers its spot across all doors. A tap goes home.
+//   A long-press fans out the combined control (modeled on the Windows
+//   floating hub in Austin's reference video, 2026-11-23): satellite
+//   buttons appear beside it — Back (when there's somewhere to go back
+//   to) and one per other enabled door — so home, back and hot-swap
+//   all live in this one control; the old separate back button and
+//   switcher panel are gone.
 // If he turns all four off, the button stays anyway as a fallback so a site
 // screen can never become a dead end.
 export default function SiteBrowser({
@@ -232,10 +236,26 @@ export default function SiteBrowser({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Long-press on the home button opens the app switcher. The press
-  // timer only survives a still finger: any real drag cancels it, and
-  // a fired long-press suppresses the tap-to-go-home on release.
-  const [swapOpen, setSwapOpen] = useState(false);
+  // Long-press on the floating control fans out its satellites. The
+  // press timer only survives a still finger: any real drag cancels
+  // it, and a fired long-press suppresses the tap-to-go-home on
+  // release. hubPos snapshots the button's spot when the fan opens,
+  // so the satellites anchor to where the button actually is.
+  const [expanded, setExpanded] = useState(false);
+  const [hubPos, setHubPos] = useState({ x: 0, y: 0 });
+  // Mirror of `expanded` for the (memoized) pan handlers, plus a flag
+  // for "this press started on an open fan" — that tap only collapses
+  // the fan, it must not also go home.
+  const expandedRef = useRef(false);
+  const collapseOnlyRef = useRef(false);
+  const openFan = () => {
+    expandedRef.current = true;
+    setExpanded(true);
+  };
+  const closeFan = () => {
+    expandedRef.current = false;
+    setExpanded(false);
+  };
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
   const clearPressTimer = () => {
@@ -252,10 +272,13 @@ export default function SiteBrowser({
         onPanResponderGrant: () => {
           dragStartRef.current = { ...posRef.current };
           longPressedRef.current = false;
+          collapseOnlyRef.current = expandedRef.current;
+          if (expandedRef.current) closeFan();
           clearPressTimer();
           pressTimerRef.current = setTimeout(() => {
             longPressedRef.current = true;
-            setSwapOpen(true);
+            setHubPos({ ...posRef.current });
+            openFan();
           }, 450);
         },
         onPanResponderMove: (_, g) => {
@@ -269,6 +292,10 @@ export default function SiteBrowser({
           clearPressTimer();
           if (longPressedRef.current) {
             longPressedRef.current = false;
+            return;
+          }
+          if (collapseOnlyRef.current) {
+            collapseOnlyRef.current = false;
             return;
           }
           if (Math.hypot(g.dx, g.dy) < 8) {
@@ -298,10 +325,70 @@ export default function SiteBrowser({
         onPanResponderTerminate: () => {
           clearPressTimer();
           longPressedRef.current = false;
+          collapseOnlyRef.current = false;
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
+  );
+
+  // --- Combined floating control: the satellite fan ---------------------
+  // Back (only when there's somewhere to go back to and its toggle is
+  // on), then one satellite per other enabled door. The fan opens
+  // toward the middle of the screen from wherever the hub sits, as a
+  // vertical stack centered on the hub, clamped to the screen.
+  const SAT = 46;
+  const SAT_GAP = 10;
+  const satellites: {
+    key: string;
+    label: string;
+    bg: string;
+    icon: React.ReactNode;
+    action: () => void;
+  }[] = [];
+  if (navCfg.backButton && canGoBack) {
+    satellites.push({
+      key: 'back',
+      label: 'Go back',
+      bg: theme.homeBtnBg,
+      icon: (
+        <MaterialIcons
+          name="arrow-back"
+          size={24}
+          color={theme.homeBtnGlyph}
+        />
+      ),
+      action: () => webRef.current?.goBack(),
+    });
+  }
+  for (const a of APPS) {
+    if (a.id === appId || !a.enabled(settings)) continue;
+    const icon =
+      a.id === 'facebook' ? (
+        <FontAwesome5 name="facebook-f" size={20} color="#fff" />
+      ) : a.id === 'youtube' ? (
+        <FontAwesome5 name="youtube" size={20} color="#fff" />
+      ) : (
+        <MaterialIcons name="storefront" size={22} color="#fff" />
+      );
+    satellites.push({
+      key: a.id,
+      label: a.label,
+      bg: a.color,
+      icon,
+      // Replace, not push: swapping shouldn't stack the doors on top
+      // of each other in the back history.
+      action: () => router.replace(a.route),
+    });
+  }
+  const fanTowardCenter = hubPos.x + BTN / 2 < win.width / 2;
+  const satX = fanTowardCenter ? hubPos.x + BTN + 12 : hubPos.x - SAT - 12;
+  const satTotal =
+    satellites.length * SAT +
+    Math.max(0, satellites.length - 1) * SAT_GAP;
+  const satStartY = Math.min(
+    Math.max(hubPos.y + BTN / 2 - satTotal / 2, insets.top + 8),
+    Math.max(insets.top + 8, win.height - satTotal - 8),
   );
 
   if (!loaded) {
@@ -393,23 +480,6 @@ export default function SiteBrowser({
           </Text>
         </Pressable>
       )}
-      {navCfg.backButton && canGoBack && (
-        <Pressable
-          accessibilityLabel="Go back"
-          onPress={() => webRef.current?.goBack()}
-          style={[
-            styles.backBtn,
-            {
-              backgroundColor: theme.homeBtnBg,
-              bottom: insets.bottom + 64,
-            },
-          ]}
-        >
-          <Text style={[styles.backBtnGlyph, { color: theme.homeBtnGlyph }]}>
-            ‹
-          </Text>
-        </Pressable>
-      )}
       {navCfg.bottomSwipe && (
         <View style={styles.grabberZone} {...bottomBar.panHandlers}>
           <View
@@ -439,64 +509,29 @@ export default function SiteBrowser({
           />
         </Animated.View>
       )}
-      {swapOpen && (
-        <View style={styles.swapOverlay}>
-          <Pressable
-            style={styles.swapBackdrop}
-            onPress={() => setSwapOpen(false)}
-          />
-          <View
-            style={[
-              styles.swapPanel,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.border,
-                bottom: insets.bottom + 90,
-              },
-            ]}
-          >
-            <Text style={[styles.swapTitle, { color: theme.muted }]}>
-              Jump to…
-            </Text>
-            {APPS.filter((a) => a.id !== appId && a.enabled(settings)).map(
-              (a) => (
-                <Pressable
-                  key={a.id}
-                  style={styles.swapRow}
-                  onPress={() => {
-                    setSwapOpen(false);
-                    // Replace, not push: swapping shouldn't stack the
-                    // doors on top of each other in the back history.
-                    router.replace(a.route);
-                  }}
-                >
-                  <View
-                    style={[styles.swapDot, { backgroundColor: a.color }]}
-                  />
-                  <Text style={[styles.swapLabel, { color: theme.text }]}>
-                    {a.label}
-                  </Text>
-                </Pressable>
-              ),
-            )}
+      {expanded && showButton && satellites.length > 0 && (
+        <View style={styles.fanOverlay}>
+          <Pressable style={styles.fanBackdrop} onPress={closeFan} />
+          {satellites.map((s, i) => (
             <Pressable
-              style={styles.swapRow}
+              key={s.key}
+              accessibilityLabel={s.label}
               onPress={() => {
-                setSwapOpen(false);
-                goHome();
+                closeFan();
+                s.action();
               }}
+              style={[
+                styles.satellite,
+                {
+                  backgroundColor: s.bg,
+                  left: satX,
+                  top: satStartY + i * (SAT + SAT_GAP),
+                },
+              ]}
             >
-              <MaterialIcons
-                name="home"
-                size={20}
-                color={theme.muted}
-                style={styles.swapHomeIcon}
-              />
-              <Text style={[styles.swapLabel, { color: theme.text }]}>
-                Home
-              </Text>
+              {s.icon}
             </Pressable>
-          </View>
+          ))}
         </View>
       )}
     </View>
@@ -530,29 +565,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   resetPillText: { fontSize: 13, fontWeight: '600' },
-  backBtn: {
-    position: 'absolute',
-    left: 12,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 10,
-  },
-  backBtnGlyph: {
-    fontSize: 30,
-    lineHeight: 32,
-    marginTop: -4,
-    marginRight: 2,
-  },
   grabberZone: {
     position: 'absolute',
     bottom: 0,
@@ -595,7 +607,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 10,
   },
-  swapOverlay: {
+  fanOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -603,41 +615,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 20,
   },
-  swapBackdrop: {
+  fanBackdrop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
-  swapPanel: {
+  satellite: {
     position: 'absolute',
-    left: 24,
-    right: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  swapTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingVertical: 6,
-  },
-  swapRow: {
-    flexDirection: 'row',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     alignItems: 'center',
-    paddingVertical: 11,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
-  swapDot: { width: 14, height: 14, borderRadius: 7, marginRight: 12 },
-  swapHomeIcon: { marginRight: 9, marginLeft: -3 },
-  swapLabel: { fontSize: 16, fontWeight: '600' },
 });

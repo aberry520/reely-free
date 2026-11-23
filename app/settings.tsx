@@ -268,7 +268,7 @@ export default function SettingsScreen() {
         <>
           <ToggleRow
             label="Floating home button"
-            detail="A movable button that's always on screen. Drag it anywhere; tap it to go home; long-press it to jump straight to another app that's turned on."
+            detail="A movable button that's always on screen. Drag it anywhere; tap it to go home; long-press it and it fans out into the combined control — back (when there's somewhere to go back to) and a jump button for each other app that's turned on."
             value={settings.navButton}
             onChange={set('navButton')}
           />
@@ -292,7 +292,7 @@ export default function SettingsScreen() {
           />
           <ToggleRow
             label="Back button"
-            detail="A small floating button appears whenever there's a page to go back to — like from a video back to the feed. It hides itself when there's nowhere to go back to."
+            detail="Adds a back arrow to the floating control's fan (long-press the home button) whenever there's a page to go back to — like from a video back to the feed. It's not in the fan when there's nowhere to go back to."
             value={settings.navBackButton}
             onChange={set('navBackButton')}
           />
