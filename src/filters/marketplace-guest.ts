@@ -238,6 +238,56 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // Orphaned backdrop (his recording, 2026-11-23 10:20): after a few
+  // actions Facebook throws a modal login prompt; the filter hides the
+  // dialog itself, but the full-screen grey wash behind it is a
+  // SEPARATE element and stays — covering everything and eating every
+  // tap. Sweep for it: a fixed/absolute element covering essentially
+  // the whole viewport that contains nothing visible — no text, no
+  // links, buttons, inputs, images or video once hidden elements are
+  // discounted. Only runs when we have actually hidden something (a
+  // marked element exists), and anything holding listing links is
+  // never touched, so a real overlay like the photo viewer (which has
+  // visible controls and an image) is safe.
+  function isEffectivelyVisible(el) {
+    try {
+      if (el.closest && el.closest('[data-rf-hidden]')) return false;
+      var r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      var cs = window.getComputedStyle(el);
+      return cs.display !== 'none' && cs.visibility !== 'hidden';
+    } catch (e) { return false; }
+  }
+  function hideOrphanBackdrops() {
+    try {
+      if (!document.querySelector('[data-rf-hidden]')) return;
+      var els = document.querySelectorAll('div, section');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.getAttribute('data-rf-hidden')) continue;
+        var pos = '';
+        try { pos = window.getComputedStyle(el).position; } catch (e) {}
+        if (pos !== 'fixed' && pos !== 'absolute') continue;
+        var r = el.getBoundingClientRect();
+        if (r.width < window.innerWidth * 0.95) continue;
+        if (r.height < window.innerHeight * 0.95) continue;
+        if (isListingHolder(el)) continue;
+        var text = '';
+        try { text = (el.innerText || '').trim(); } catch (e) {}
+        if (text.length > 0) continue;
+        var content = el.querySelectorAll(
+          'a, button, input, select, textarea, [role="button"], [role="link"], img, video, iframe'
+        );
+        var blocked = false;
+        for (var k = 0; k < content.length; k++) {
+          if (isEffectivelyVisible(content[k])) { blocked = true; break; }
+        }
+        if (blocked) continue;
+        el.setAttribute('data-rf-hidden', '1');
+        el.style.setProperty('display', 'none', 'important');
+      }
+    } catch (e) {}
+  }
   function apply() {
     ensureStyle();
     if (S.dismissLogin) {
@@ -247,6 +297,7 @@ export function buildMarketplaceGuestScript(
       hideBottomLoginBar();
       hideLoginPanel();
     }
+    if (S.dismissLogin || S.blockLoginBar) hideOrphanBackdrops();
     unlockScroll();
   }
   apply();
