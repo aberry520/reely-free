@@ -79,27 +79,51 @@ export function buildFacebookScript(settings: FilterSettings): string {
       img.style.cssText =
         'width:24px;height:24px;border-radius:6px;display:block;' +
         'margin:auto;object-fit:cover;flex:none;';
-      // In-place: the mark takes the original icon's exact spot in
-      // its own wrapper. (v1 appended it to the end of the link,
-      // which landed it outside the nav slot — under Instagram's
-      // bottom bar in his screenshot.)
-      var host = first && first.parentNode ? first.parentNode : el;
-      if (first && first.parentNode) host.insertBefore(img, first);
-      else el.appendChild(img);
-      try {
-        host.style.setProperty('display', 'flex', 'important');
-        host.style.setProperty('align-items', 'center', 'important');
-        host.style.setProperty('justify-content', 'center', 'important');
-      } catch (e) {}
-      var icons = el.querySelectorAll('svg, img, i');
-      for (var q = 0; q < icons.length; q++) {
-        if (icons[q] === img) continue;
-        icons[q].style.setProperty('display', 'none', 'important');
+      // Placement: in a tab-sized entry the mark is centered in the
+      // entry itself (absolute) — the in-place insert landed it in
+      // the icon's corner, overlapping the old icon (his screenshot,
+      // 2026-11-23: "close but wonky"). In a wide list-style entry it
+      // takes the original icon's spot in its own wrapper instead
+      // (v1 appended it to the end of the link, which landed it
+      // outside the nav slot entirely).
+      var entryRect = el.getBoundingClientRect();
+      if (entryRect.width > 0 && entryRect.width <= 120) {
+        try {
+          if (window.getComputedStyle(el).position === 'static') {
+            el.style.setProperty('position', 'relative');
+          }
+        } catch (e) {}
+        img.style.cssText +=
+          'position:absolute;left:50%;top:50%;' +
+          'transform:translate(-50%,-50%);margin:0;';
+        el.appendChild(img);
+      } else {
+        var host = first && first.parentNode ? first.parentNode : el;
+        if (first && first.parentNode) host.insertBefore(img, first);
+        else el.appendChild(img);
+        try {
+          host.style.setProperty('display', 'flex', 'important');
+          host.style.setProperty('align-items', 'center', 'important');
+          host.style.setProperty('justify-content', 'center', 'important');
+        } catch (e) {}
       }
-      // The stand-in box (when the icon wasn't an svg/img/i) goes too.
-      if (first && first.tagName !== 'svg' && first.tagName !== 'IMG' &&
-          first.tagName !== 'I' && first !== img) {
-        first.style.setProperty('display', 'none', 'important');
+      // Remove the old icon completely — his words: "remove the
+      // icon and replace it with ours." The old icon survived the
+      // svg/img/i hiding because this layout draws it as a CSS
+      // background on a wrapper. So: strip background images from
+      // the entry and everything inside it, and hide every
+      // descendant that carries no text (icon boxes and their
+      // wrappers). Text labels and the count badge carry text, so
+      // they stay.
+      try { el.style.setProperty('background-image', 'none', 'important'); } catch (e) {}
+      var nodes = el.querySelectorAll('*');
+      for (var q = 0; q < nodes.length; q++) {
+        var nd = nodes[q];
+        if (nd === img || (nd.contains && nd.contains(img))) continue;
+        try { nd.style.setProperty('background-image', 'none', 'important'); } catch (e) {}
+        if ((nd.textContent || '').trim() === '') {
+          nd.style.setProperty('display', 'none', 'important');
+        }
       }
       el.addEventListener('click', function (ev) {
         ev.preventDefault();
