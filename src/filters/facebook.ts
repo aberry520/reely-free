@@ -334,6 +334,36 @@ export function buildFacebookScript(settings: FilterSettings): string {
     // taps (play/pause), horizontal drags (the seek bar), feed
     // scrolling, and scrolling comments — the gate is the video
     // being viewer-sized, which a feed video never is.
+    // Austin's alternative, kept as feedback on top of the
+    // block: when a swipe is swallowed, flash the Reely Free
+    // icon in the middle of the viewer for a moment, so the
+    // block reads as intentional rather than a frozen app.
+    // Self-throttling: it won't re-show while one is visible.
+    function flashSwipeIcon() {
+      try {
+        if (document.querySelector('[data-rf-swipe-icon]')) return;
+        var d = document.createElement('div');
+        d.setAttribute('data-rf-swipe-icon', '1');
+        d.style.cssText =
+          'position:fixed;left:50%;top:50%;z-index:9999;' +
+          'transform:translate(-50%,-50%);pointer-events:none;' +
+          'opacity:1;transition:opacity 0.35s;';
+        var im = document.createElement('img');
+        im.src = MARK;
+        im.alt = 'Reely Free';
+        im.style.cssText =
+          'width:84px;height:84px;border-radius:20px;display:block;' +
+          'box-shadow:0 4px 24px rgba(0,0,0,0.35);';
+        d.appendChild(im);
+        document.body.appendChild(d);
+        setTimeout(function () {
+          d.style.opacity = '0';
+          setTimeout(function () {
+            if (d.parentNode) d.parentNode.removeChild(d);
+          }, 400);
+        }, 550);
+      } catch (err) {}
+    }
     var swipeStart = null;
     document.addEventListener('touchstart', function (e) {
       try {
@@ -369,6 +399,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
         e.preventDefault();
         e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        flashSwipeIcon();
       } catch (err) {}
     }, { capture: true, passive: false });
   }
@@ -436,8 +467,19 @@ export function buildFacebookScript(settings: FilterSettings): string {
         // unit with the branded panel. The section itself is left
         // completely untouched underneath. Wrapped so a failure
         // here can never break the rest of the pass.
+        // FEED ONLY: on a video page the same "Reels" header
+        // belongs to the up-next rail, and the first cover build
+        // happily covered the player with it (Austin's recording:
+        // tapping a video showed the logo page instead of the
+        // video). Viewer routes skip the sweep entirely, and a
+        // header living inside a full-screen fixed layer (the
+        // in-page viewer overlay) is never covered either.
         try {
-          var heads = document.querySelectorAll(
+          var onViewer = /^\\/reel\\//.test(location.pathname) ||
+            location.pathname.indexOf('video.php') >= 0 ||
+            (location.pathname.indexOf('/watch') === 0 &&
+             /[?&]v=/.test(location.search));
+          var heads = onViewer ? [] : document.querySelectorAll(
             'div, span, h2, h3, h4, [role="heading"]');
           for (var hh = 0; hh < heads.length; hh++) {
             var hd = heads[hh];
@@ -450,6 +492,18 @@ export function buildFacebookScript(settings: FilterSettings): string {
             var row2 = findHeaderRow(hd);
             if (!row2) continue;
             if (row2.querySelector('[data-rf-cover]')) continue;
+            var anc2 = row2, inFixedLayer = false;
+            for (var ai = 0; ai < 8 && anc2; ai++) {
+              try {
+                if (window.getComputedStyle(anc2).position === 'fixed' &&
+                    anc2.getBoundingClientRect().height >=
+                      window.innerHeight * 0.7) {
+                  inFixedLayer = true; break;
+                }
+              } catch (e) {}
+              anc2 = anc2.parentElement;
+            }
+            if (inFixedLayer) continue;
             var unit2 = findReelsUnit(row2);
             if (unit2) coverReelsUnit(unit2);
             else coverFromRow(row2);
