@@ -155,11 +155,75 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // The big login panel (his screenshot, 2026-11-23 10:05): a tall white
+  // panel — "Log in or sign up for Facebook to connect with friends…"
+  // over a blue Log In button, "or", and a green Create new account
+  // button. The bottom-bar rule missed it twice over: the panel is far
+  // taller than a bar (~a third of the screen) and it sits in the page
+  // flow under the listings rather than fixed to the viewport. Find it
+  // by its signature instead of its shape: the container that holds
+  // BOTH a "Log In" control and a "Create new account" control, is
+  // wide, and holds no listing links. Climb from either button to the
+  // outermost such container and hide that. The lone Log In button in
+  // the page header (top right, same screenshot) is hidden on its own.
+  function hideLoginPanel() {
+    try {
+      var ctrls = document.querySelectorAll('a, button, [role="button"]');
+      for (var i = 0; i < ctrls.length; i++) {
+        var c = ctrls[i];
+        if (c.getAttribute('data-rf-hidden')) continue;
+        var t = (c.textContent || '').trim();
+        var isLogin = t === 'Log In' || t === 'Log in';
+        var isCreate = t === 'Create new account' || t === 'Create account';
+        if (!isLogin && !isCreate) continue;
+        // Innermost only: a wrapper whose text is exactly the label
+        // because it wraps the real button would double-count.
+        if (c.querySelector && c.querySelector('a, button, [role="button"]')) continue;
+        var r0 = c.getBoundingClientRect();
+        // Header Log In button: near the top of the page, hide just it.
+        if (isLogin && r0.top >= 0 && r0.top < 140 && r0.height <= 60) {
+          c.setAttribute('data-rf-hidden', '1');
+          c.style.setProperty('display', 'none', 'important');
+          continue;
+        }
+        // Panel: climb while ancestors still hold both controls, stay
+        // wide, stay under ~75% of the viewport tall, and never swallow
+        // listings.
+        var best = null;
+        var el = c.parentElement;
+        var depth = 0;
+        while (el && depth < 10) {
+          depth++;
+          if (isListingHolder(el)) break;
+          var r = el.getBoundingClientRect();
+          if (r.width < window.innerWidth * 0.8) break;
+          if (r.height > window.innerHeight * 0.8) break;
+          var hasLogin = false, hasCreate = false;
+          var inner = el.querySelectorAll('a, button, [role="button"]');
+          for (var k = 0; k < inner.length; k++) {
+            var it = (inner[k].textContent || '').trim();
+            if (it === 'Log In' || it === 'Log in') hasLogin = true;
+            if (it === 'Create new account' || it === 'Create account') hasCreate = true;
+          }
+          if (!hasLogin || !hasCreate) break;
+          best = el;
+          el = el.parentElement;
+        }
+        if (best) {
+          best.setAttribute('data-rf-hidden', '1');
+          best.style.setProperty('display', 'none', 'important');
+        }
+      }
+    } catch (e) {}
+  }
   function apply() {
     if (S.dismissLogin) {
       if (!tryClose()) hideLoginWalls();
     }
-    if (S.blockLoginBar) hideBottomLoginBar();
+    if (S.blockLoginBar) {
+      hideBottomLoginBar();
+      hideLoginPanel();
+    }
     unlockScroll();
   }
   apply();
