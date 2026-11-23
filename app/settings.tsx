@@ -180,16 +180,22 @@ export default function SettingsScreen() {
         value={settings.mpGuestBlockLoginBar}
         onChange={set('mpGuestBlockLoginBar')}
       />
+      <ToggleRow
+        label="Use my location"
+        detail="The guest door opens with no location set, so Facebook uses the location it detects for your device — the way it already found Iva on its own. Turn this off to browse the city typed below instead."
+        value={settings.mpGuestUseMyLocation}
+        onChange={set('mpGuestUseMyLocation')}
+      />
       <TextRow
         label="Guest location"
-        detail="City the guest door opens on — a city name, not a ZIP (Facebook's location links use city names). Applies the next time you open the door."
+        detail="Only used when 'Use my location' is off. A city name, not a ZIP (Facebook's location links use city names). Applies the next time you open the door."
         value={settings.mpGuestLocation}
         onSave={(v) => update({ mpGuestLocation: v })}
         autoCapitalize="words"
       />
       <TextRow
         label="Guest radius (miles)"
-        detail="How far around that city the guest door asks Marketplace to show. Applies the next time you open the door."
+        detail="Only used when 'Use my location' is off. How far around that city the guest door asks Marketplace to show. Applies the next time you open the door."
         value={settings.mpGuestRadiusMiles}
         onSave={(v) => update({ mpGuestRadiusMiles: v })}
         keyboardType="number-pad"

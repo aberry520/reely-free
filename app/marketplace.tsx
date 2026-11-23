@@ -19,8 +19,12 @@ import { useTheme } from '../src/lib/theme';
 // right) remounts the WebView fresh when the wall stops being
 // dismissible.
 //
-// Location (his ask, 2026-11-23): the door opens on the city set in
-// Settings, via Facebook's location slug — the path segment in
+// Location (his asks, 2026-11-23): by default "Use my location" is on
+// and the door sends no location at all — Facebook detects where the
+// device is (his screenshot: Iva, SC, from the IP address) and the
+// typed slug/radius were overridden for a logged-out session anyway.
+// With the toggle off, the door opens on the city typed in Settings,
+// via Facebook's location slug — the path segment in
 // facebook.com/marketplace/<slug>/, the city name lowercased with spaces
 // and punctuation removed ("San Francisco" -> "sanfrancisco"). ZIPs do
 // not work in that segment. The radius from Settings (miles) is sent as
@@ -32,7 +36,17 @@ const DESKTOP_UA =
   'AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'Chrome/126.0.0.0 Safari/537.36';
 
-function guestHomeUrl(location: string, radiusMiles: string): string {
+function guestHomeUrl(
+  useMyLocation: boolean,
+  location: string,
+  radiusMiles: string,
+): string {
+  // "Use my location" (his pick): send no location at all. For a
+  // logged-out session Facebook ignores the slug/radius in the URL and
+  // uses the location it detects for the device anyway (his screenshot:
+  // Iva, South Carolina, detected from the IP address) — so the honest
+  // version of the feature is to get out of its way.
+  if (useMyLocation) return 'https://www.facebook.com/marketplace/';
   const slug = (location.split(',')[0] || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
@@ -67,6 +81,7 @@ export default function MarketplaceGuestScreen() {
   return (
     <SiteBrowser
       homeUrl={guestHomeUrl(
+        settings.mpGuestUseMyLocation,
         settings.mpGuestLocation,
         settings.mpGuestRadiusMiles,
       )}

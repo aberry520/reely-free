@@ -250,6 +250,7 @@ export default function SiteBrowser({
         injectedJavaScriptBeforeContentLoaded={script}
         javaScriptEnabled
         domStorageEnabled
+        geolocationEnabled
         thirdPartyCookiesEnabled={!incognito}
         // Shared cookies are the bridge between doors: the Facebook door
         // writes its login into the shared cookie storage and every
