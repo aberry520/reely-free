@@ -394,34 +394,19 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
-  // The stylesheet unlock covers html/body, but desktop Facebook
-  // scrolls inside a container div, and the modal lock can land on
-  // THAT element instead — overflow-y hidden on the one box that
-  // actually scrolls, which the html/body rule never reaches. Release
-  // any large element that is locked while holding more content than
-  // it shows. Legit overflow-hidden boxes (carousels, cropped media)
-  // are small or hold no excess vertical content, so they are left
-  // alone; a hidden wall root is skipped via its marker.
-  function releaseScrollLocks() {
-    try {
-      var els = document.querySelectorAll('div, section, main');
-      for (var i = 0; i < els.length; i++) {
-        var el = els[i];
-        if (el.getAttribute('data-rf-hidden')) continue;
-        if (el.closest && el.closest('[data-rf-hidden]')) continue;
-        if (el.getAttribute('data-rf-scrollfree')) continue;
-        var oy = '';
-        try { oy = window.getComputedStyle(el).overflowY; } catch (e) {}
-        if (oy !== 'hidden') continue;
-        if (el.scrollHeight <= el.clientHeight + 24) continue;
-        var r = el.getBoundingClientRect();
-        if (r.height < window.innerHeight * 0.4) continue;
-        el.setAttribute('data-rf-scrollfree', '1');
-        el.style.setProperty('overflow-y', 'auto', 'important');
-        el.style.setProperty('overflow-x', 'hidden', 'important');
-      }
-    } catch (e) {}
-  }
+  // NOTE (2026-11-23 10:48): a releaseScrollLocks helper that forced
+  // overflow-y:auto on large locked containers lived here for one
+  // build (b968862) and was REMOVED the same morning. His retest
+  // recording showed the wash gone (the modal-root hide worked) but
+  // scrolling now died after ~12 listings with the next row rendered
+  // yet clipped — the signature of a nested scroll container
+  // capturing the gesture: forcing a wrapper into a scroller made it
+  // eat the swipe and exhaust its small range, and iOS WebViews do
+  // not reliably chain that scroll back to the page. Mutating the
+  // layout of containers we do not understand is worse than the lock
+  // it was meant to release; the html/body stylesheet unlock stays,
+  // and this helper does not come back without evidence the lock
+  // actually lands on an inner container.
   function apply() {
     ensureStyle();
     if (S.dismissLogin) {
@@ -434,7 +419,17 @@ export function buildMarketplaceGuestScript(
     if (S.dismissLogin || S.blockLoginBar) {
       hideOrphanBackdrops();
       probeBlockers();
-      releaseScrollLocks();
+    }
+    unlockScroll();
+  }
+  // Light pass for use mid-scroll: the wall hunt and the scroll
+  // unlock only. The full apply() runs getComputedStyle sweeps over
+  // thousands of nodes; running those on every scroll tick starves
+  // the page's own scroll handling, so scroll events never call it.
+  function applyLight() {
+    ensureStyle();
+    if (S.dismissLogin) {
+      if (!tryClose()) hideLoginWalls();
     }
     unlockScroll();
   }
@@ -457,7 +452,7 @@ export function buildMarketplaceGuestScript(
     window.addEventListener('scroll', function () {
       if (!scrollPending) {
         scrollPending = true;
-        setTimeout(function () { scrollPending = false; apply(); }, 600);
+        setTimeout(function () { scrollPending = false; applyLight(); }, 600);
       }
     }, true);
   } catch (e) {}
