@@ -65,18 +65,32 @@ export function buildInstagramScript(settings: FilterSettings): string {
     try {
       if (!el || el.getAttribute('data-rf-branded')) return;
       el.setAttribute('data-rf-branded', '1');
-      var icons = el.querySelectorAll('svg, img, i');
-      for (var q = 0; q < icons.length; q++) {
-        icons[q].style.setProperty('display', 'none', 'important');
-      }
+      var first = el.querySelector('svg, img, i');
       var img = document.createElement('img');
       img.src = MARK;
       img.alt = 'Reely Free';
       img.setAttribute('data-rf-mark', '1');
       img.style.cssText =
-        'width:26px;height:26px;border-radius:7px;display:block;' +
-        'margin:auto;object-fit:cover;';
-      el.appendChild(img);
+        'width:24px;height:24px;border-radius:6px;display:block;' +
+        'margin:auto;object-fit:cover;flex:none;';
+      // In-place: the mark takes the original icon's exact spot in
+      // its own wrapper. (v1 appended it to the end of the link,
+      // which landed it BELOW the bottom nav bar in his screenshot
+      // — the link's box is only as tall as its icon, and the
+      // appended image overflowed underneath the bar.)
+      var host = first && first.parentNode ? first.parentNode : el;
+      if (first && first.parentNode) host.insertBefore(img, first);
+      else el.appendChild(img);
+      try {
+        host.style.setProperty('display', 'flex', 'important');
+        host.style.setProperty('align-items', 'center', 'important');
+        host.style.setProperty('justify-content', 'center', 'important');
+      } catch (e) {}
+      var icons = el.querySelectorAll('svg, img, i');
+      for (var q = 0; q < icons.length; q++) {
+        if (icons[q] === img) continue;
+        icons[q].style.setProperty('display', 'none', 'important');
+      }
       el.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();

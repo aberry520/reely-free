@@ -39,19 +39,35 @@ export function buildFacebookScript(settings: FilterSettings): string {
   function brandIcon(el) {
     try {
       if (!el || el.getAttribute('data-rf-branded')) return;
+      var first = el.querySelector('svg, img, i');
+      // Icon entries only: a plain text link (e.g. a /watch link
+      // typed into a comment) has no icon to replace — leave it.
+      if (!first) return;
       el.setAttribute('data-rf-branded', '1');
-      var icons = el.querySelectorAll('svg, img, i');
-      for (var q = 0; q < icons.length; q++) {
-        icons[q].style.setProperty('display', 'none', 'important');
-      }
       var img = document.createElement('img');
       img.src = MARK;
       img.alt = 'Reely Free';
       img.setAttribute('data-rf-mark', '1');
       img.style.cssText =
-        'width:26px;height:26px;border-radius:7px;display:block;' +
-        'margin:auto;object-fit:cover;';
-      el.appendChild(img);
+        'width:24px;height:24px;border-radius:6px;display:block;' +
+        'margin:auto;object-fit:cover;flex:none;';
+      // In-place: the mark takes the original icon's exact spot in
+      // its own wrapper. (v1 appended it to the end of the link,
+      // which landed it outside the nav slot — under Instagram's
+      // bottom bar in his screenshot.)
+      var host = first && first.parentNode ? first.parentNode : el;
+      if (first && first.parentNode) host.insertBefore(img, first);
+      else el.appendChild(img);
+      try {
+        host.style.setProperty('display', 'flex', 'important');
+        host.style.setProperty('align-items', 'center', 'important');
+        host.style.setProperty('justify-content', 'center', 'important');
+      } catch (e) {}
+      var icons = el.querySelectorAll('svg, img, i');
+      for (var q = 0; q < icons.length; q++) {
+        if (icons[q] === img) continue;
+        icons[q].style.setProperty('display', 'none', 'important');
+      }
       el.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -162,9 +178,16 @@ export function buildFacebookScript(settings: FilterSettings): string {
       // Nav / shortcut entries that lead to Reels: the entry
       // stays, branded with the Reely Free mark instead of the
       // Reels icon (it used to be hidden; Austin asked for the
-      // mark in its place, 2026-11-23).
+      // mark in its place, 2026-11-23). The top tab bar's video
+      // entry is a /watch link, not a /reel one — the first cut
+      // only matched /reel/, so the tab kept its own icon (his
+      // screenshot: the film/play tab, 4th from the left, still
+      // unbranded) — so /watch entries outside posts are branded
+      // too. Watch links INSIDE a post are left to the post rules
+      // and the viewer lockdown.
       if (S.blockReels) {
-        var navLinks = document.querySelectorAll('a[href*="/reel/"]');
+        var navLinks = document.querySelectorAll(
+          'a[href*="/reel/"], a[href*="/watch"]');
         for (var i = 0; i < navLinks.length; i++) {
           var inArticle = navLinks[i].closest
             ? navLinks[i].closest('[role="article"]') : null;

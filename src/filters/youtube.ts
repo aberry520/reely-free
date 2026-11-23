@@ -31,33 +31,49 @@ export function buildYouTubeScript(settings: FilterSettings): string {
   // Removed-entry branding (Austin, 2026-11-23): the Shorts
   // button in the bottom pivot bar is no longer hidden — its icon
   // is replaced with the Reely Free mark (icon-only version, the
-  // header/footer rule) and its label cleared, so the slot stays
+  // header/footer rule) and its label rewritten, so the slot stays
   // but is visibly Reely Free's. The button is inert: taps are
   // swallowed. Idempotent via the flag.
   function brandShorts(item) {
     try {
       if (!item || item.getAttribute('data-rf-branded')) return;
       item.setAttribute('data-rf-branded', '1');
-      var icons = item.querySelectorAll('svg, img, i, yt-icon');
-      for (var q = 0; q < icons.length; q++) {
-        icons[q].style.setProperty('display', 'none', 'important');
-      }
-      var labels = item.querySelectorAll('span, div, p');
-      for (var l = 0; l < labels.length; l++) {
-        if ((labels[l].textContent || '').trim() === 'Shorts' &&
-            !labels[l].querySelector('span, div, p')) {
-          labels[l].textContent = '';
-        }
-      }
-      var host = item.querySelector('a, button, [role="button"]') || item;
+      var first = item.querySelector('svg, img, i, yt-icon');
       var img = document.createElement('img');
       img.src = MARK;
       img.alt = 'Reely Free';
       img.setAttribute('data-rf-mark', '1');
       img.style.cssText =
-        'width:26px;height:26px;border-radius:7px;display:block;' +
-        'margin:auto;object-fit:cover;';
-      host.appendChild(img);
+        'width:24px;height:24px;border-radius:6px;display:block;' +
+        'margin:auto;object-fit:cover;flex:none;';
+      // In-place: the mark takes the Shorts icon's exact spot in
+      // its own wrapper. (v1 appended it inside the button, which
+      // stacked it off-line from the other pivot icons in his
+      // screenshot.)
+      var host = first && first.parentNode ? first.parentNode : item;
+      if (first && first.parentNode) host.insertBefore(img, first);
+      else item.appendChild(img);
+      try {
+        host.style.setProperty('display', 'flex', 'important');
+        host.style.setProperty('align-items', 'center', 'important');
+        host.style.setProperty('justify-content', 'center', 'important');
+      } catch (e) {}
+      var icons = item.querySelectorAll('svg, img, i, yt-icon');
+      for (var q = 0; q < icons.length; q++) {
+        if (icons[q] === img) continue;
+        icons[q].style.setProperty('display', 'none', 'important');
+      }
+      // Label: 'Reely Free' in place of 'Shorts', so the slot
+      // keeps the same icon-over-label shape as its neighbours
+      // (v1 cleared the label, which left the mark floating
+      // lower than every other pivot icon).
+      var labels = item.querySelectorAll('span, div, p');
+      for (var l = 0; l < labels.length; l++) {
+        if ((labels[l].textContent || '').trim() === 'Shorts' &&
+            !labels[l].querySelector('span, div, p')) {
+          labels[l].textContent = 'Reely Free';
+        }
+      }
       item.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -103,9 +119,10 @@ export function buildYouTubeScript(settings: FilterSettings): string {
         }
         // The Shorts button in the bottom pivot bar (matched by
         // its label): branded with the Reely Free mark instead of
-        // hidden. Note the label is cleared by branding, so the
-        // text match only fires on the first pass — the branded
-        // flag keeps later passes from touching it again.
+        // hidden. Note branding rewrites the label to 'Reely
+        // Free', so the text match only fires on the first pass —
+        // the branded flag keeps later passes from touching it
+        // again.
         var items = document.querySelectorAll('ytm-pivot-bar-item-renderer');
         for (var k = 0; k < items.length; k++) {
           if ((items[k].textContent || '').trim() === 'Shorts') brandShorts(items[k]);
