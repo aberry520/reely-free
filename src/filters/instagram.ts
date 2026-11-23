@@ -117,17 +117,36 @@ export function buildInstagramScript(settings: FilterSettings): string {
         var r = input.getBoundingClientRect();
         if (r.bottom > 0) top = Math.floor(r.bottom) + 6;
       }
-      // Bottom: just above the bottom nav bar, if one is pinned
-      // there — it must stay tappable so he can leave Explore.
+      // Bottom: just above the bottom nav bar — it must stay
+      // tappable so he can leave Explore. (First cut measured <nav>
+      // elements directly and missed Instagram's footer entirely,
+      // so the cover ran to the bottom of the screen and blocked
+      // Home/Profile — his screenshot, 2026-11-23.) Now: climb from
+      // the footer's own links to the bar pinned at the bottom, and
+      // if nothing is found, still leave a 60px strip — the cover
+      // must never reach the bottom edge.
       var bottom = 0;
-      var navs = document.querySelectorAll('nav, [role="navigation"]');
-      for (var i = 0; i < navs.length; i++) {
-        var nr = navs[i].getBoundingClientRect();
-        if (nr.height >= 36 && nr.height <= 90 &&
-            Math.abs(nr.bottom - window.innerHeight) <= 4) {
-          bottom = Math.max(bottom, window.innerHeight - Math.floor(nr.top));
+      try {
+        var anchors = document.querySelectorAll(
+          'a[href="/"], a[href="/explore/"], a[href^="/direct/"]'
+        );
+        for (var a = 0; a < anchors.length && !bottom; a++) {
+          var node = anchors[a];
+          var d = 0;
+          while (node && d < 9) {
+            node = node.parentElement; d++;
+            if (!node) break;
+            var nr = node.getBoundingClientRect();
+            if (nr.height >= 36 && nr.height <= 110 &&
+                nr.width >= window.innerWidth * 0.7 &&
+                Math.abs(nr.bottom - window.innerHeight) <= 8) {
+              bottom = window.innerHeight - Math.floor(nr.top);
+              break;
+            }
+          }
         }
-      }
+      } catch (e) {}
+      if (!bottom) bottom = 60;
       cover.style.top = top + 'px';
       cover.style.bottom = bottom + 'px';
       // While he's actually searching, step aside entirely.
