@@ -6,6 +6,8 @@ import type { FilterSettings } from '../lib/settings';
 // lazy-loads. Everything is wrapped defensively: a filter bug must never
 // break the page itself.
 export function buildYouTubeScript(settings: FilterSettings): string {
+  // Feature master off: the door is plain YouTube, no injection at all.
+  if (!settings.featureYouTube) return 'true;';
   const s = JSON.stringify({
     blockShorts: settings.ytBlockShorts,
     landOnSubs: settings.ytLandOnSubs,

@@ -64,6 +64,16 @@ export default function SiteBrowser({
   blockUrlFragments,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
+  // Getting home feature master: when off, every nav aid stands down
+  // (the anti-stuck rule below still keeps the floating button).
+  const navMaster = settings.featureGettingHome;
+  const navCfg = {
+    button: navMaster && settings.navButton,
+    bottomSwipe: navMaster && settings.navBottomSwipe,
+    leftEdge: navMaster && settings.navLeftEdge,
+    rightEdge: navMaster && settings.navRightEdge,
+    backButton: navMaster && settings.navBackButton,
+  };
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -138,10 +148,7 @@ export default function SiteBrowser({
   // The button shows when its toggle is on — or when every other way home
   // is off, so he can never get stuck on a site screen.
   const showButton =
-    settings.navButton ||
-    (!settings.navBottomSwipe &&
-      !settings.navLeftEdge &&
-      !settings.navRightEdge);
+    navCfg.button || (!navCfg.bottomSwipe && !navCfg.leftEdge && !navCfg.rightEdge);
 
   // --- Draggable floating home button -------------------------------------
   const win = Dimensions.get('window');
@@ -315,7 +322,7 @@ export default function SiteBrowser({
           </Text>
         </Pressable>
       )}
-      {settings.navBackButton && canGoBack && (
+      {navCfg.backButton && canGoBack && (
         <Pressable
           accessibilityLabel="Go back"
           onPress={() => webRef.current?.goBack()}
@@ -332,14 +339,14 @@ export default function SiteBrowser({
           </Text>
         </Pressable>
       )}
-      {settings.navBottomSwipe && (
+      {navCfg.bottomSwipe && (
         <View style={styles.grabberZone} {...bottomBar.panHandlers}>
           <View
             style={[styles.grabberPill, { backgroundColor: theme.grabber }]}
           />
         </View>
       )}
-      {settings.navRightEdge && (
+      {navCfg.rightEdge && (
         <View style={styles.rightEdgeZone} {...rightEdge.panHandlers} />
       )}
       {showButton && btnReady && (

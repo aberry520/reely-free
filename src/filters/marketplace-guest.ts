@@ -22,6 +22,7 @@ export function buildMarketplaceGuestScript(
   settings: FilterSettings,
 ): string {
   const s = JSON.stringify({
+    enabled: settings.featureGuestMarketplace,
     dismissLogin: settings.mpGuestDismissLogin,
     blockLoginBar: settings.mpGuestBlockLoginBar,
   });
@@ -29,7 +30,7 @@ export function buildMarketplaceGuestScript(
   return `
 (function () {
   var S = ${s};
-  if (!S.dismissLogin && !S.blockLoginBar) { true; return; }
+  if (!S.enabled || (!S.dismissLogin && !S.blockLoginBar)) { true; return; }
   // Persistent hide: an inline display:none can be wiped when Facebook's
   // React re-renders the node (his recording, 2026-11-23: the panel was
   // hidden, then popped back). A stylesheet rule keyed on the marker

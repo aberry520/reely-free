@@ -17,6 +17,8 @@ import { useTheme } from '../src/lib/theme';
 function AppStack() {
   const theme = useTheme();
   const { settings } = useSettings();
+  // Getting home feature master gates the left-edge gesture too.
+  const leftEdge = settings.featureGettingHome && settings.navLeftEdge;
   return (
     <>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
@@ -26,7 +28,7 @@ function AppStack() {
           name="facebook"
           options={{
             headerShown: false,
-            gestureEnabled: settings.navLeftEdge,
+            gestureEnabled: leftEdge,
             animation: 'slide_from_left',
           }}
         />
@@ -34,7 +36,7 @@ function AppStack() {
           name="marketplace"
           options={{
             headerShown: false,
-            gestureEnabled: settings.navLeftEdge,
+            gestureEnabled: leftEdge,
             animation: 'slide_from_left',
           }}
         />
@@ -42,7 +44,7 @@ function AppStack() {
           name="youtube"
           options={{
             headerShown: false,
-            gestureEnabled: settings.navLeftEdge,
+            gestureEnabled: leftEdge,
             animation: 'slide_from_left',
           }}
         />

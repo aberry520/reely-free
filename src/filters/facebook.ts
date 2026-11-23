@@ -7,6 +7,8 @@ import type { FilterSettings } from '../lib/settings';
 // deliberately never touched — Austin sells there. Everything is wrapped
 // defensively: a filter bug must never break the page itself.
 export function buildFacebookScript(settings: FilterSettings): string {
+  // Feature master off: the door is plain Facebook, no injection at all.
+  if (!settings.featureFacebook) return 'true;';
   const s = JSON.stringify({
     blockReels: settings.fbBlockReels,
     hideSuggested: settings.fbHideSuggested,

@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { FilterSettings } from '../src/lib/settings';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
@@ -35,6 +29,45 @@ function ToggleRow({
   );
 }
 
+// Feature header (Austin's ask, 2026-11-23): each feature gets an
+// obvious band — a filled header block with the feature name big and
+// its master switch on the right. The master is a real off switch for
+// the whole feature, not just a folder: off means the door runs plain
+// (or the nav aids stand down) AND the feature's own toggles below
+// are hidden, so Settings only shows what's actually in play. The
+// sub-toggle values are kept, so switching back on restores them.
+function FeatureHeader({
+  title,
+  detail,
+  value,
+  onChange,
+}: {
+  title: string;
+  detail: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View
+      style={[
+        styles.featureHeader,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <View style={styles.rowText}>
+        <Text style={[styles.featureTitle, { color: theme.text }]}>
+          {title}
+        </Text>
+        <Text style={[styles.rowDetail, { color: theme.muted }]}>
+          {detail}
+        </Text>
+      </View>
+      <Switch value={value} onValueChange={onChange} />
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const { settings, update } = useSettings();
   const theme = useTheme();
@@ -47,116 +80,151 @@ export default function SettingsScreen() {
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
-      <Text style={[styles.section, { color: theme.text }]}>YouTube</Text>
-      <ToggleRow
-        label="Block Shorts"
-        detail="Hides Shorts shelves and the Shorts button. A Shorts link someone sends you opens as a normal video instead."
-        value={settings.ytBlockShorts}
-        onChange={set('ytBlockShorts')}
+      <FeatureHeader
+        title="YouTube"
+        detail="Filters for the YouTube door. Off = plain YouTube, nothing filtered."
+        value={settings.featureYouTube}
+        onChange={set('featureYouTube')}
       />
-      <ToggleRow
-        label="Open on Subscriptions"
-        detail="YouTube's home page redirects to your subscriptions feed."
-        value={settings.ytLandOnSubs}
-        onChange={set('ytLandOnSubs')}
-      />
-      <ToggleRow
-        label="Hide Up Next"
-        detail="Hides the autoplaying list of follow-on videos on watch pages."
-        value={settings.ytHideUpNext}
-        onChange={set('ytHideUpNext')}
-      />
-      <ToggleRow
-        label="Block app popups"
-        detail="Hides the 'Get the best experience' popup and the Open App button in the header."
-        value={settings.ytBlockAppPromo}
-        onChange={set('ytBlockAppPromo')}
-      />
-      <ToggleRow
-        label="Swipe down on video to go back"
-        detail="Swipe down on the playing video to return to the feed, like the app. The video stops — the web version has no mini-player to shrink into."
-        value={settings.ytSwipeDownBack}
-        onChange={set('ytSwipeDownBack')}
-      />
+      {settings.featureYouTube && (
+        <>
+          <ToggleRow
+            label="Block Shorts"
+            detail="Hides Shorts shelves and the Shorts button. A Shorts link someone sends you opens as a normal video instead."
+            value={settings.ytBlockShorts}
+            onChange={set('ytBlockShorts')}
+          />
+          <ToggleRow
+            label="Open on Subscriptions"
+            detail="YouTube's home page redirects to your subscriptions feed."
+            value={settings.ytLandOnSubs}
+            onChange={set('ytLandOnSubs')}
+          />
+          <ToggleRow
+            label="Hide Up Next"
+            detail="Hides the autoplaying list of follow-on videos on watch pages."
+            value={settings.ytHideUpNext}
+            onChange={set('ytHideUpNext')}
+          />
+          <ToggleRow
+            label="Block app popups"
+            detail="Hides the 'Get the best experience' popup and the Open App button in the header."
+            value={settings.ytBlockAppPromo}
+            onChange={set('ytBlockAppPromo')}
+          />
+          <ToggleRow
+            label="Swipe down on video to go back"
+            detail="Swipe down on the playing video to return to the feed, like the app. The video stops — the web version has no mini-player to shrink into."
+            value={settings.ytSwipeDownBack}
+            onChange={set('ytSwipeDownBack')}
+          />
+        </>
+      )}
 
-      <Text style={[styles.section, { color: theme.text }]}>Facebook</Text>
-      <ToggleRow
-        label="Block Reels"
-        detail="Hides Reels in the feed and Watch, and the shortcuts that lead to them."
-        value={settings.fbBlockReels}
-        onChange={set('fbBlockReels')}
+      <FeatureHeader
+        title="Facebook"
+        detail="Filters for the Facebook door. Off = plain Facebook, nothing filtered. Marketplace inside Facebook is never filtered either way."
+        value={settings.featureFacebook}
+        onChange={set('featureFacebook')}
       />
-      <ToggleRow
-        label="Hide suggested posts"
-        detail="Hides every 'Suggested for you' post — pages, groups and people Facebook recommends."
-        value={settings.fbHideSuggested}
-        onChange={set('fbHideSuggested')}
-      />
-      <ToggleRow
-        label="Hide sponsored posts"
-        detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
-        value={settings.fbHideSponsored}
-        onChange={set('fbHideSponsored')}
-      />
-      <ToggleRow
-        label="Block 'Open app' bar"
-        detail="Hides the Open app bar at the bottom of the feed and similar get-the-app banners."
-        value={settings.fbBlockAppPromo}
-        onChange={set('fbBlockAppPromo')}
-      />
-      <ToggleRow
-        label="Header returns on scroll up"
-        detail="Like the app: the top bar scrolls away going down and comes back as soon as you scroll up, instead of only at the very top."
-        value={settings.fbStickyHeader}
-        onChange={set('fbStickyHeader')}
-      />
+      {settings.featureFacebook && (
+        <>
+          <ToggleRow
+            label="Block Reels"
+            detail="Hides Reels in the feed and Watch, and the shortcuts that lead to them."
+            value={settings.fbBlockReels}
+            onChange={set('fbBlockReels')}
+          />
+          <ToggleRow
+            label="Hide suggested posts"
+            detail="Hides every 'Suggested for you' post — pages, groups and people Facebook recommends."
+            value={settings.fbHideSuggested}
+            onChange={set('fbHideSuggested')}
+          />
+          <ToggleRow
+            label="Hide sponsored posts"
+            detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
+            value={settings.fbHideSponsored}
+            onChange={set('fbHideSponsored')}
+          />
+          <ToggleRow
+            label="Block 'Open app' bar"
+            detail="Hides the Open app bar at the bottom of the feed and similar get-the-app banners."
+            value={settings.fbBlockAppPromo}
+            onChange={set('fbBlockAppPromo')}
+          />
+          <ToggleRow
+            label="Header returns on scroll up"
+            detail="Like the app: the top bar scrolls away going down and comes back as soon as you scroll up, instead of only at the very top."
+            value={settings.fbStickyHeader}
+            onChange={set('fbStickyHeader')}
+          />
+        </>
+      )}
 
-      <Text style={[styles.section, { color: theme.text }]}>
-        Guest Marketplace
-      </Text>
-      <ToggleRow
-        label="Dismiss the login prompt"
-        detail="On the 'Marketplace — no account' door: automatically closes Facebook's login prompt so you can keep browsing. Experimental — Facebook may still wall off some listings, and messaging or selling always needs an account. If the wall stops dismissing, use Reset guest on that screen."
-        value={settings.mpGuestDismissLogin}
-        onChange={set('mpGuestDismissLogin')}
+      <FeatureHeader
+        title="Guest Marketplace"
+        detail="The 'Marketplace — no account' door. Off = the login walls, bar and panel all come back; the door itself still opens."
+        value={settings.featureGuestMarketplace}
+        onChange={set('featureGuestMarketplace')}
       />
-      <ToggleRow
-        label="Block the bottom login bar"
-        detail="Hides the login prompt bar pinned to the bottom of the guest Marketplace screen."
-        value={settings.mpGuestBlockLoginBar}
-        onChange={set('mpGuestBlockLoginBar')}
+      {settings.featureGuestMarketplace && (
+        <>
+          <ToggleRow
+            label="Dismiss the login prompt"
+            detail="Automatically closes Facebook's login prompt so you can keep browsing. Experimental — Facebook may still wall off some listings, and messaging or selling always needs an account. If the wall stops dismissing, use Reset guest on that screen."
+            value={settings.mpGuestDismissLogin}
+            onChange={set('mpGuestDismissLogin')}
+          />
+          <ToggleRow
+            label="Block the bottom login bar"
+            detail="Hides the login prompt bar pinned to the bottom of the guest Marketplace screen."
+            value={settings.mpGuestBlockLoginBar}
+            onChange={set('mpGuestBlockLoginBar')}
+          />
+        </>
+      )}
+
+      <FeatureHeader
+        title="Getting home"
+        detail="Ways back to the home screen from a site. Off = all of them stand down — except the floating button, which always stays so you can't get stuck."
+        value={settings.featureGettingHome}
+        onChange={set('featureGettingHome')}
       />
-      <Text style={[styles.section, { color: theme.text }]}>Getting home</Text>
-      <ToggleRow
-        label="Floating home button"
-        detail="A movable button that's always on screen. Drag it anywhere; tap it to go home."
-        value={settings.navButton}
-        onChange={set('navButton')}
-      />
-      <ToggleRow
-        label="Dismiss from bottom"
-        detail="Swipe up on the bar at the bottom center. iOS often steals this gesture for itself, so it can be hit or miss."
-        value={settings.navBottomSwipe}
-        onChange={set('navBottomSwipe')}
-      />
-      <ToggleRow
-        label="Dismiss from left"
-        detail="Swipe in from the left edge — the standard iOS back gesture."
-        value={settings.navLeftEdge}
-        onChange={set('navLeftEdge')}
-      />
-      <ToggleRow
-        label="Dismiss from right"
-        detail="Swipe in from the right edge of the screen."
-        value={settings.navRightEdge}
-        onChange={set('navRightEdge')}
-      />
-      <ToggleRow
-        label="Back button"
-        detail="A small floating button appears whenever there's a page to go back to — like from a video back to the feed. It hides itself when there's nowhere to go back to."
-        value={settings.navBackButton}
-        onChange={set('navBackButton')}
-      />
+      {settings.featureGettingHome && (
+        <>
+          <ToggleRow
+            label="Floating home button"
+            detail="A movable button that's always on screen. Drag it anywhere; tap it to go home."
+            value={settings.navButton}
+            onChange={set('navButton')}
+          />
+          <ToggleRow
+            label="Dismiss from bottom"
+            detail="Swipe up on the bar at the bottom center. iOS often steals this gesture for itself, so it can be hit or miss."
+            value={settings.navBottomSwipe}
+            onChange={set('navBottomSwipe')}
+          />
+          <ToggleRow
+            label="Dismiss from left"
+            detail="Swipe in from the left edge — the standard iOS back gesture."
+            value={settings.navLeftEdge}
+            onChange={set('navLeftEdge')}
+          />
+          <ToggleRow
+            label="Dismiss from right"
+            detail="Swipe in from the right edge of the screen."
+            value={settings.navRightEdge}
+            onChange={set('navRightEdge')}
+          />
+          <ToggleRow
+            label="Back button"
+            detail="A small floating button appears whenever there's a page to go back to — like from a video back to the feed. It hides itself when there's nowhere to go back to."
+            value={settings.navBackButton}
+            onChange={set('navBackButton')}
+          />
+        </>
+      )}
 
       <Text style={[styles.note, { color: theme.muted }]}>
         Changes apply the next time you open a door. Marketplace inside
@@ -171,12 +239,17 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
-  section: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 24,
-    marginBottom: 8,
+  featureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginTop: 26,
+    marginBottom: 6,
   },
+  featureTitle: { fontSize: 20, fontWeight: '800' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -186,5 +259,5 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, paddingRight: 12 },
   rowLabel: { fontSize: 16, fontWeight: '600' },
   rowDetail: { fontSize: 13, marginTop: 3, lineHeight: 18 },
-  note: { fontSize: 13, marginTop: 24, lineHeight: 19 },
+  note: { fontSize: 13, marginTop: 24, lineHeight: 19, paddingBottom: 24 },
 });
