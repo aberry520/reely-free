@@ -294,14 +294,67 @@ export function buildFacebookScript(settings: FilterSettings): string {
     } catch (e) {}
     return false;
   }
-  function inViewer(vid) {
+  function viewerRoute() {
     try {
       if (/^\\/reel\\//.test(location.pathname)) return true;
       if (location.pathname.indexOf('video.php') >= 0) return true;
       if (location.pathname.indexOf('/watch') === 0 &&
           /[?&]v=/.test(location.search)) return true;
     } catch (e) {}
-    return videoInViewerLayer(vid);
+    return false;
+  }
+  // Find the viewer's container around a starting element (a
+  // touch target, or a video). Two shapes qualify:
+  //  - a fixed/absolute layer covering essentially the whole
+  //    screen that holds a video (the overlay viewer), or
+  //  - a full-screen scroller whose slides are each exactly as
+  //    tall as the scroller and hold videos (the paged viewer —
+  //    "swiping" there is literally this element scrolling
+  //    between slides). Scroll-snap confirms it; without snap,
+  //    two direct full-height video slides are required.
+  // The feed's scroller matches neither: its posts vary in
+  // height and it has no snap. Returns null outside the viewer.
+  function findViewerContext(fromEl) {
+    try {
+      var el = fromEl, depth = 0;
+      while (el && depth < 14) {
+        var cs = window.getComputedStyle(el);
+        if (cs && el.getBoundingClientRect) {
+          var r = el.getBoundingClientRect();
+          var wideEnough = r.width >= window.innerWidth * 0.9;
+          if (wideEnough && r.height >= window.innerHeight * 0.95 &&
+              (cs.position === 'fixed' || cs.position === 'absolute') &&
+              el.querySelector && el.querySelector('video')) {
+            return el;
+          }
+          if (wideEnough && r.height >= window.innerHeight * 0.85 &&
+              (cs.overflowY === 'auto' || cs.overflowY === 'scroll')) {
+            var counter = { n: 0 };
+            var countIn = function (parent) {
+              var kids = parent.children;
+              for (var i = 0; i < kids.length; i++) {
+                var kr = kids[i].getBoundingClientRect();
+                if (kr.height > 0 &&
+                    Math.abs(kr.height - r.height) <= r.height * 0.03 &&
+                    kids[i].querySelector &&
+                    kids[i].querySelector('video')) counter.n++;
+              }
+            };
+            countIn(el);
+            var directSlides = counter.n;
+            var snap = cs.scrollSnapType && cs.scrollSnapType !== 'none';
+            if (snap && directSlides < 1) {
+              var kids3 = el.children;
+              for (var g = 0; g < kids3.length; g++) countIn(kids3[g]);
+            }
+            if ((snap && counter.n >= 1) ||
+                (!snap && directSlides >= 2)) return el;
+          }
+        }
+        el = el.parentElement; depth++;
+      }
+    } catch (e) {}
+    return null;
   }
   // Walk up from a link to a plausible card container and hide that.
   function hideCard(node) {
@@ -357,14 +410,17 @@ export function buildFacebookScript(settings: FilterSettings): string {
         }
       } catch (err) {}
     }, true);
-    // Swipe disabling: inside the viewer, a vertical drag on the
-    // video is the swipe-to-next gesture. Swallow vertical
-    // touchmoves that land on the video while the viewer is open
-    // (capture phase, before Facebook's own handlers see them).
-    // Everything else is untouched: taps (play/pause), horizontal
-    // drags (the seek bar), feed scrolling, and scrolling
-    // comments. "Inside the viewer" is decided by inViewer() —
-    // route or full-screen layer, never the video's size.
+    // Swipe disabling: at touchstart, work out where the gesture
+    // lives — a single-video route (all viewer), or the viewer
+    // container around the touch point (findViewerContext). In
+    // the feed it finds nothing and the gesture is never touched.
+    // The earlier build hunted for the <video> from the touch
+    // target and gated on it being in a layer; taps land on
+    // overlay elements the hunt missed, so the block never fired
+    // and the viewer kept swiping (Austin's recording). Vertical
+    // moves inside the context are swallowed in capture phase;
+    // taps, horizontal drags (the seek bar) and scrollable
+    // sub-panels without a video (the comments sheet) are not.
     // Austin's alternative, kept as feedback on top of the
     // block: when a swipe is swallowed, flash the Reely Free
     // icon in the middle of the viewer for a moment, so the
@@ -396,37 +452,37 @@ export function buildFacebookScript(settings: FilterSettings): string {
       } catch (err) {}
     }
     var swipeStart = null;
+    var gestureCtx = null;
     document.addEventListener('touchstart', function (e) {
       try {
-        if (e.touches && e.touches.length === 1) {
-          swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        } else swipeStart = null;
-      } catch (err) { swipeStart = null; }
+        gestureCtx = null;
+        if (!e.touches || e.touches.length !== 1) {
+          swipeStart = null;
+          return;
+        }
+        swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        if (location.pathname.indexOf('/marketplace') === 0) return;
+        gestureCtx = viewerRoute() ? document.body
+          : findViewerContext(e.target);
+      } catch (err) { swipeStart = null; gestureCtx = null; }
     }, { capture: true, passive: true });
     document.addEventListener('touchmove', function (e) {
       try {
-        if (!swipeStart) return;
-        if (location.pathname.indexOf('/marketplace') === 0) return;
+        if (!swipeStart || !gestureCtx) return;
         var t = e.target;
         if (!t || t.nodeType !== 1) return;
-        // The video under this touch, if any: the target is the
-        // video, wraps it, or sits inside its frame.
-        var vid = null;
-        if (t.tagName === 'VIDEO') vid = t;
-        else if (t.querySelector) vid = t.querySelector('video');
-        if (!vid && t.closest) {
-          var wrap = t.closest('div');
-          if (wrap && wrap.querySelector) vid = wrap.querySelector('video');
+        if (gestureCtx !== document.body && !gestureCtx.contains(t)) return;
+        // A scrollable sub-panel inside the viewer that holds no
+        // video (the comments sheet, a list) keeps its scroll.
+        var el = t;
+        while (el && el !== gestureCtx) {
+          var cs = null;
+          try { cs = window.getComputedStyle(el); } catch (err2) {}
+          if (cs && (cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
+              el.scrollHeight > el.clientHeight + 40 &&
+              !(el.querySelector && el.querySelector('video'))) return;
+          el = el.parentElement;
         }
-        if (!vid) return;
-        // ONLY inside the viewer: a single-video route, or the
-        // video living in the full-screen viewer layer. A big
-        // video in the feed is neither — the first build gated
-        // on the video's size alone, and large feed videos pass
-        // that easily, so the block (and the icon flash) fired
-        // mid-feed and ate feed scrolling (Austin's recording).
-        // The feed must never be touched.
-        if (!inViewer(vid)) return;
         var dx = e.touches[0].clientX - swipeStart.x;
         var dy = e.touches[0].clientY - swipeStart.y;
         if (Math.abs(dy) < 12 || Math.abs(dy) <= Math.abs(dx)) return;
@@ -497,6 +553,33 @@ export function buildFacebookScript(settings: FilterSettings): string {
           }
           brandIcon(entry || cand2);
         }
+        // Freeze the viewer's slide scroller while it's open:
+        // if "swiping" is really that scroller scrolling between
+        // full-height slides, overflow:hidden pins it to the
+        // current video outright (the gesture block is the
+        // backstop for drag-driven viewers). Anything frozen is
+        // restored the moment it stops being the viewer.
+        try {
+          var frozenNow = [];
+          var vidsNow = document.querySelectorAll('video');
+          for (var fv = 0; fv < vidsNow.length; fv++) {
+            var fctx = findViewerContext(vidsNow[fv]);
+            if (fctx && fctx !== document.body) {
+              if (!fctx.getAttribute('data-rf-frozen')) {
+                fctx.setAttribute('data-rf-frozen', '1');
+                fctx.style.setProperty('overflow-y', 'hidden', 'important');
+              }
+              if (frozenNow.indexOf(fctx) < 0) frozenNow.push(fctx);
+            }
+          }
+          var frozenAll = document.querySelectorAll('[data-rf-frozen]');
+          for (var fz = 0; fz < frozenAll.length; fz++) {
+            if (frozenNow.indexOf(frozenAll[fz]) < 0) {
+              frozenAll[fz].removeAttribute('data-rf-frozen');
+              frozenAll[fz].style.removeProperty('overflow-y');
+            }
+          }
+        } catch (e) {}
         // Reels sections: find the "Reels" header and cover its
         // unit with the branded panel. The section itself is left
         // completely untouched underneath. Wrapped so a failure
