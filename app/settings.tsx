@@ -471,6 +471,12 @@ export default function SettingsScreen() {
                 value={settings.mpaAllowMessages}
                 onChange={set('mpaAllowMessages')}
               />
+              <ToggleRow
+                label="Block 'Open app' bar"
+                detail="Hides the 'Open app' bar pinned to the bottom of Marketplace, like the Facebook door does."
+                value={settings.mpaBlockAppPromo}
+                onChange={set('mpaBlockAppPromo')}
+              />
               <UsageLimitRows
                 usedSec={usage.marketplaceAccount ?? 0}
                 limitMin={settings.mpaDailyLimitMin}

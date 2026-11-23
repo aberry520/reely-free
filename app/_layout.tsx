@@ -49,6 +49,14 @@ function AppStack() {
           }}
         />
         <Stack.Screen
+          name="marketplace-account"
+          options={{
+            headerShown: false,
+            gestureEnabled: leftEdge,
+            animation: 'slide_from_left',
+          }}
+        />
+        <Stack.Screen
           name="youtube"
           options={{
             headerShown: false,
