@@ -130,73 +130,129 @@ export function buildFacebookScript(settings: FilterSettings): string {
   // starts at the very top of the document (offsetTop, so scroll position
   // doesn't matter), is bar-shaped (full width, 36-96px tall), contains
   // no posts, and holds several controls including a home link or a
-  // search box. Two cases are handled: a header that scrolls away with
-  // the page (we pin it ourselves, with padding on the parent so the
-  // feed doesn't jump), and a header Facebook already keeps fixed but
-  // hides on scroll down (we force it back into view on scroll up and
-  // hand it back on scroll down).
+  // search box. The app header is TWO rows (wordmark bar + nav tab bar),
+  // so from the first bar we climb to the container holding both rows
+  // (at most ~150px tall) and pin that; if the rows share no container,
+  // the second row is found directly below the first and pinned under
+  // it. Two cases are handled: a header that scrolls away with the page
+  // (we pin it ourselves, with padding on the parent so the feed doesn't
+  // jump), and a header Facebook already keeps fixed but hides on scroll
+  // down (we force it back into view on scroll up and hand it back on
+  // scroll down).
   if (S.stickyHeader) {
-    var hdr = null, hdrParent = null, hdrHeight = 0, hdrMode = '', hdrShown = false;
+    var items = null, hdrMode = '', hdrShown = false, totalHeight = 0;
     var lastY = 0, lastSearch = 0;
+    function offsetTopOf(el) {
+      var t = 0, n = el;
+      while (n) { t += n.offsetTop || 0; n = n.offsetParent; }
+      return t;
+    }
+    function looksLikeBar(el, minH, maxH) {
+      var r = el.getBoundingClientRect();
+      if (r.height < minH || r.height > maxH) return null;
+      if (r.width < window.innerWidth * 0.95) return null;
+      if (offsetTopOf(el) > 8) return null;
+      if (el.querySelector && el.querySelector('[role="article"]')) return null;
+      return r;
+    }
     function findHeader() {
-      if (hdr && document.contains(hdr)) return hdr;
+      if (items) return items;
       try {
         var all = document.querySelectorAll('div, header, nav, section');
+        var bar = null, barRect = null;
         for (var i = 0; i < all.length; i++) {
           var el = all[i];
-          var r = el.getBoundingClientRect();
-          if (r.height < 36 || r.height > 96) continue;
-          if (r.width < window.innerWidth * 0.95) continue;
-          var offTop = 0, n = el;
-          while (n) { offTop += n.offsetTop || 0; n = n.offsetParent; }
-          if (offTop > 8) continue;
-          if (el.querySelector && el.querySelector('[role="article"]')) continue;
+          var r = looksLikeBar(el, 36, 96);
+          if (!r) continue;
           var controls = el.querySelectorAll('a, button, [role="button"], input');
           if (controls.length < 3) continue;
           var hasHome = !!el.querySelector('a[href="/"], a[href^="/?"], a[href*="facebook.com"]');
           var hasSearch = !!el.querySelector('input, [aria-label*="Search"]');
           if (!hasHome && !hasSearch) continue;
-          var pos = '';
-          try { pos = window.getComputedStyle(el).position; } catch (e) {}
-          hdr = el;
-          hdrParent = el.parentElement;
-          hdrHeight = r.height;
-          hdrMode = (pos === 'fixed' || pos === 'sticky') ? 'site' : 'flow';
-          return hdr;
+          bar = el; barRect = r;
+          break;
         }
+        if (!bar) return null;
+        // Climb to a container that also holds the nav tab row.
+        var box = bar;
+        while (box.parentElement) {
+          var p = box.parentElement;
+          var pr = p.getBoundingClientRect();
+          if (pr.height > 150 || pr.width < window.innerWidth * 0.95) break;
+          if (offsetTopOf(p) > 8) break;
+          if (p.querySelector && p.querySelector('[role="article"]')) break;
+          box = p;
+        }
+        var pos = '';
+        try { pos = window.getComputedStyle(box).position; } catch (e) {}
+        hdrMode = (pos === 'fixed' || pos === 'sticky') ? 'site' : 'flow';
+        items = [{ el: box, parent: box.parentElement, height: box.getBoundingClientRect().height, top: 0 }];
+        // No climb happened and the container is just the one row: look
+        // for the nav tab row sitting directly beneath it and pin it too.
+        if (box === bar) {
+          for (var j = 0; j < all.length; j++) {
+            var el2 = all[j];
+            if (el2 === bar || bar.contains(el2)) continue;
+            var r2 = el2.getBoundingClientRect();
+            if (r2.height < 30 || r2.height > 96) continue;
+            if (r2.width < window.innerWidth * 0.95) continue;
+            var ot = offsetTopOf(el2);
+            if (ot < barRect.height - 10 || ot > barRect.height + 14) continue;
+            if (el2.querySelector && el2.querySelector('[role="article"]')) continue;
+            if (el2.querySelectorAll('a, button, [role="button"]').length < 3) continue;
+            items.push({ el: el2, parent: el2.parentElement, height: r2.height, top: barRect.height });
+            break;
+          }
+        }
+        totalHeight = 0;
+        for (var k = 0; k < items.length; k++) totalHeight += items[k].height;
+        return items;
       } catch (e) {}
       return null;
     }
     function setShown(on) {
-      if (!hdr || hdrShown === on) return;
+      if (!items || hdrShown === on) return;
       hdrShown = on;
       try {
-        if (hdrMode === 'site') {
-          if (on) {
-            hdr.style.setProperty('transform', 'none', 'important');
-            hdr.style.setProperty('top', '0', 'important');
-            hdr.style.setProperty('opacity', '1', 'important');
-            hdr.style.setProperty('visibility', 'visible', 'important');
+        var pads = [];
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i], el = it.el;
+          if (hdrMode === 'site') {
+            if (on) {
+              el.style.setProperty('transform', 'none', 'important');
+              el.style.setProperty('top', it.top + 'px', 'important');
+              el.style.setProperty('opacity', '1', 'important');
+              el.style.setProperty('visibility', 'visible', 'important');
+            } else {
+              el.style.removeProperty('transform');
+              el.style.removeProperty('top');
+              el.style.removeProperty('opacity');
+              el.style.removeProperty('visibility');
+            }
+          } else if (on) {
+            el.style.setProperty('position', 'fixed', 'important');
+            el.style.setProperty('top', it.top + 'px', 'important');
+            el.style.setProperty('left', '0', 'important');
+            el.style.setProperty('right', '0', 'important');
+            el.style.setProperty('z-index', '999', 'important');
+            if (it.parent) {
+              var found = null;
+              for (var m = 0; m < pads.length; m++) if (pads[m][0] === it.parent) found = pads[m];
+              if (found) found[1] += it.height; else pads.push([it.parent, it.height]);
+            }
           } else {
-            hdr.style.removeProperty('transform');
-            hdr.style.removeProperty('top');
-            hdr.style.removeProperty('opacity');
-            hdr.style.removeProperty('visibility');
+            el.style.removeProperty('position');
+            el.style.removeProperty('top');
+            el.style.removeProperty('left');
+            el.style.removeProperty('right');
+            el.style.removeProperty('z-index');
+            if (it.parent) it.parent.style.removeProperty('padding-top');
           }
-        } else if (on) {
-          hdr.style.setProperty('position', 'fixed', 'important');
-          hdr.style.setProperty('top', '0', 'important');
-          hdr.style.setProperty('left', '0', 'important');
-          hdr.style.setProperty('right', '0', 'important');
-          hdr.style.setProperty('z-index', '999', 'important');
-          if (hdrParent) hdrParent.style.setProperty('padding-top', hdrHeight + 'px', 'important');
-        } else {
-          hdr.style.removeProperty('position');
-          hdr.style.removeProperty('top');
-          hdr.style.removeProperty('left');
-          hdr.style.removeProperty('right');
-          hdr.style.removeProperty('z-index');
-          if (hdrParent) hdrParent.style.removeProperty('padding-top');
+        }
+        if (hdrMode !== 'site' && on) {
+          for (var n = 0; n < pads.length; n++) {
+            pads[n][0].style.setProperty('padding-top', pads[n][1] + 'px', 'important');
+          }
         }
       } catch (e) {}
     }
@@ -205,13 +261,13 @@ export function buildFacebookScript(settings: FilterSettings): string {
         var target = e.target;
         var y = (target && target !== document && typeof target.scrollTop === 'number')
           ? target.scrollTop : (window.scrollY || 0);
-        if (!hdr) {
+        if (!items) {
           var now = Date.now();
           if (now - lastSearch < 800) { lastY = y; return; }
           lastSearch = now;
           if (!findHeader()) { lastY = y; return; }
         }
-        if (y <= hdrHeight) setShown(true);
+        if (y <= totalHeight) setShown(true);
         else if (y < lastY - 4) setShown(true);
         else if (y > lastY + 4) setShown(false);
         lastY = y;
