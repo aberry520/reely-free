@@ -221,7 +221,7 @@ export default function SettingsScreen() {
               />
               <ToggleRow
                 label="Hide sponsored posts"
-                detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
+                detail="Hides posts labelled Ad or Sponsored. Best effort — some ad formats slip through."
                 value={settings.igHideSponsored}
                 onChange={set('igHideSponsored')}
               />

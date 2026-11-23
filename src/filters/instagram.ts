@@ -7,6 +7,20 @@ import type { FilterSettings } from '../lib/settings';
 // as the feed lazy-loads. Everything is wrapped defensively: a filter
 // bug must never break the page itself.
 //
+// v2 fix (his first-test recording, 2026-11-23): after ~a minute of
+// scrolling the feed glitched into a long black void, then recovered
+// further down. Cause: Instagram's mobile feed RECYCLES its post
+// elements — the same <article> node is refilled with new posts as
+// you scroll — and v1's hiding was sticky: once a node was marked
+// hidden it stayed hidden forever, so recycled nodes carried the
+// hide into whatever post loaded next, blanking more and more of the
+// feed the longer he scrolled. v2 re-evaluates every post on every
+// pass and UN-hides a node whose current content no longer matches
+// any rule — hiding follows the content, never the node. The same
+// recording exposed two label misses, also fixed: ads here are
+// labelled "Ad" (not only "Sponsored"), and the suggestions header
+// reads "Suggestions for you" (with an s).
+//
 // Scope notes (v1, Austin's pick 2026-11-23 — Instagram added first of
 // the candidate apps):
 // - "Block Reels" kills the Reels FEED (the /reels/ surface redirects
@@ -34,6 +48,25 @@ export function buildInstagramScript(settings: FilterSettings): string {
       el.setAttribute('data-rf-hidden', '1');
       el.style.setProperty('display', 'none', 'important');
     }
+  }
+  function unhide(el) {
+    if (el && el.getAttribute('data-rf-hidden')) {
+      el.removeAttribute('data-rf-hidden');
+      el.style.removeProperty('display');
+    }
+  }
+  // An ad carries its label as a small standalone element under the
+  // account name: "Ad" or "Sponsored". Leaf elements only, exact text,
+  // so a caption merely containing the words never matches.
+  function hasAdLabel(post) {
+    var leaves = post.querySelectorAll('span, div');
+    for (var i = 0; i < leaves.length; i++) {
+      var leaf = leaves[i];
+      if (leaf.children && leaf.children.length > 0) continue;
+      var t = (leaf.textContent || '').trim();
+      if (t === 'Ad' || t === 'Sponsored') return true;
+    }
+    return false;
   }
   // Hide the section a label belongs to (e.g. a "Suggested for you"
   // header): climb to the outermost ancestor that still looks like a
@@ -91,22 +124,26 @@ export function buildInstagramScript(settings: FilterSettings): string {
           if (!link.closest || !link.closest('article')) hide(link);
         }
       }
-      // Feed posts.
+      // Feed posts. NEVER skip a marked post: Instagram recycles
+      // these nodes, so every pass re-decides from the CURRENT
+      // content and un-hides a node that no longer matches (see the
+      // v2 note at the top of this file).
       var posts = document.querySelectorAll('article');
       for (var j = 0; j < posts.length; j++) {
         var post = posts[j];
-        if (post.getAttribute('data-rf-hidden')) continue;
         var text = '';
         try { text = post.innerText || post.textContent || ''; } catch (e) {}
+        var shouldHide = false;
         if (S.blockReels && post.querySelector('a[href^="/reel/"]')) {
-          hide(post); continue;
+          shouldHide = true;
+        } else if (S.hideSuggested &&
+            (text.indexOf('Suggested for you') >= 0 ||
+             text.indexOf('Suggestions for you') >= 0)) {
+          shouldHide = true;
+        } else if (S.hideSponsored && hasAdLabel(post)) {
+          shouldHide = true;
         }
-        if (S.hideSuggested && text.indexOf('Suggested for you') >= 0) {
-          hide(post); continue;
-        }
-        if (S.hideSponsored && /(^|\\s)Sponsored(\\s|$)/.test(text.slice(0, 300))) {
-          hide(post); continue;
-        }
+        if (shouldHide) hide(post); else unhide(post);
       }
       // "Suggested for you" sections outside posts (account carousels,
       // follow suggestions on profiles): hide the whole section.
@@ -115,7 +152,8 @@ export function buildInstagramScript(settings: FilterSettings): string {
         for (var k = 0; k < labels.length; k++) {
           var lab = labels[k];
           if (lab.getAttribute('data-rf-hidden')) continue;
-          if ((lab.textContent || '').trim() !== 'Suggested for you') continue;
+          var labText = (lab.textContent || '').trim();
+          if (labText !== 'Suggested for you' && labText !== 'Suggestions for you') continue;
           if (lab.querySelector && lab.querySelector('div, span')) continue;
           if (lab.closest && lab.closest('article')) continue;
           hideSection(lab);
