@@ -82,7 +82,7 @@ export default function SettingsScreen() {
     >
       <FeatureHeader
         title="YouTube"
-        detail="Filters for the YouTube door. Off = plain YouTube, nothing filtered."
+        detail="Filters for the YouTube door. Off = the YouTube door leaves the home screen entirely."
         value={settings.featureYouTube}
         onChange={set('featureYouTube')}
       />
@@ -123,7 +123,7 @@ export default function SettingsScreen() {
 
       <FeatureHeader
         title="Facebook"
-        detail="Filters for the Facebook door. Off = plain Facebook, nothing filtered. Marketplace inside Facebook is never filtered either way."
+        detail="Filters for the Facebook door. Off = the Facebook door leaves the home screen entirely. Marketplace inside Facebook is never filtered either way."
         value={settings.featureFacebook}
         onChange={set('featureFacebook')}
       />
@@ -164,7 +164,7 @@ export default function SettingsScreen() {
 
       <FeatureHeader
         title="Guest Marketplace"
-        detail="The 'Marketplace — no account' door. Off = the login walls, bar and panel all come back; the door itself still opens."
+        detail="The 'Marketplace — no account' door. Off = that door and the guest search leave the home screen entirely."
         value={settings.featureGuestMarketplace}
         onChange={set('featureGuestMarketplace')}
       />

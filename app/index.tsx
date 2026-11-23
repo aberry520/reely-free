@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
 
 // Home: three doors. Facebook and YouTube, minus the parts designed to
@@ -83,6 +84,14 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  // Feature masters (Settings): a disabled feature's door leaves the
+  // home screen entirely — the guest search launcher goes with the
+  // Marketplace card, since it only exists to serve that door.
+  const { settings } = useSettings();
+  const anyDoor =
+    settings.featureFacebook ||
+    settings.featureYouTube ||
+    settings.featureGuestMarketplace;
   const [query, setQuery] = useState('');
   const [band, setBand] = useState(0);
   const [sort, setSort] = useState(0);
@@ -115,38 +124,52 @@ export default function HomeScreen() {
         Facebook and YouTube, without the hooks.
       </Text>
 
-      <Pressable
-        style={[styles.card, styles.facebookCard]}
-        onPress={() => router.push('/facebook')}
-      >
-        <Text style={styles.cardTitle}>Facebook</Text>
-        <Text style={styles.cardDetail}>
-          No Reels, no suggested posts, no sponsored posts. Feed, groups and
-          Marketplace stay.
-        </Text>
-      </Pressable>
+      {settings.featureFacebook && (
+        <Pressable
+          style={[styles.card, styles.facebookCard]}
+          onPress={() => router.push('/facebook')}
+        >
+          <Text style={styles.cardTitle}>Facebook</Text>
+          <Text style={styles.cardDetail}>
+            No Reels, no suggested posts, no sponsored posts. Feed, groups and
+            Marketplace stay.
+          </Text>
+        </Pressable>
+      )}
 
-      <Pressable
-        style={[styles.card, styles.youtubeCard]}
-        onPress={() => router.push('/youtube')}
-      >
-        <Text style={styles.cardTitle}>YouTube</Text>
-        <Text style={styles.cardDetail}>
-          No Shorts, no home feed rabbit hole. Opens on your subscriptions.
-        </Text>
-      </Pressable>
+      {settings.featureYouTube && (
+        <Pressable
+          style={[styles.card, styles.youtubeCard]}
+          onPress={() => router.push('/youtube')}
+        >
+          <Text style={styles.cardTitle}>YouTube</Text>
+          <Text style={styles.cardDetail}>
+            No Shorts, no home feed rabbit hole. Opens on your subscriptions.
+          </Text>
+        </Pressable>
+      )}
 
-      <Pressable
-        style={[styles.card, styles.marketplaceCard]}
-        onPress={() => router.push('/marketplace')}
-      >
-        <Text style={styles.cardTitle}>Marketplace — no account</Text>
-        <Text style={styles.cardDetail}>
-          Experimental: browse and search Marketplace without signing in.
-          Look only — messaging and selling still need an account.
-        </Text>
-      </Pressable>
+      {settings.featureGuestMarketplace && (
+        <Pressable
+          style={[styles.card, styles.marketplaceCard]}
+          onPress={() => router.push('/marketplace')}
+        >
+          <Text style={styles.cardTitle}>Marketplace — no account</Text>
+          <Text style={styles.cardDetail}>
+            Experimental: browse and search Marketplace without signing in.
+            Look only — messaging and selling still need an account.
+          </Text>
+        </Pressable>
+      )}
 
+      {!anyDoor && (
+        <Text style={[styles.launcherDetail, { color: theme.muted }]}>
+          Every feature is turned off right now. Turn one back on in
+          Settings and its door comes back here.
+        </Text>
+      )}
+
+      {settings.featureGuestMarketplace && (
       <View
         style={[
           styles.launcher,
@@ -185,6 +208,7 @@ export default function HomeScreen() {
           <Text style={styles.searchButtonText}>Search as guest</Text>
         </Pressable>
       </View>
+      )}
 
       <Pressable
         style={styles.settingsButton}
