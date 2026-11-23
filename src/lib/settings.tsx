@@ -25,6 +25,7 @@ export interface FilterSettings {
   featureFacebook: boolean;
   featureInstagram: boolean;
   featureGuestMarketplace: boolean;
+  featureMarketplaceAccount: boolean;
   // YouTube
   ytBlockShorts: boolean;
   ytLandOnSubs: boolean;
@@ -44,6 +45,30 @@ export interface FilterSettings {
   // itself is never hidden any more (see filters/instagram.ts).
   igHideSuggested: boolean;
   igBlockAppPromo: boolean;
+  // Daily usage limits (Austin's ask, 2026-11-23): per door, a daily
+  // limit in minutes (0 = no limit) and what happens at the cap —
+  // lock = true covers the door for the rest of the day, lock =
+  // false just shows a warning banner. Time is counted by
+  // SiteBrowser (focused + foreground only) into src/lib/usage.ts.
+  // Marketplace inside Facebook counts as Facebook time (same door);
+  // the guest door has its own mp* pair.
+  fbDailyLimitMin: number;
+  fbLimitLock: boolean;
+  igDailyLimitMin: number;
+  igLimitLock: boolean;
+  ytDailyLimitMin: number;
+  ytLimitLock: boolean;
+  mpDailyLimitMin: number;
+  mpLimitLock: boolean;
+  mpaDailyLimitMin: number;
+  mpaLimitLock: boolean;
+  // Marketplace WITH his account (Austin's ask, 2026-11-23): a door
+  // that signs into Facebook but stays in Marketplace — the rest of
+  // Facebook is ignored. Stay = taps that would leave Marketplace
+  // do nothing and stray landings bounce back; messages can stay
+  // reachable for talking to buyers and sellers.
+  mpaStayInMarketplace: boolean;
+  mpaAllowMessages: boolean;
   // Guest Marketplace (experimental desktop door). No location settings
   // on purpose (his decision, 2026-11-23): typed city/radius fields and
   // then a "use my location" toggle both failed to move Facebook, which
@@ -66,6 +91,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   featureFacebook: true,
   featureInstagram: true,
   featureGuestMarketplace: true,
+  featureMarketplaceAccount: true,
   ytBlockShorts: true,
   ytLandOnSubs: true,
   ytHideUpNext: true,
@@ -80,6 +106,18 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   igHideExplore: true,
   igHideSuggested: true,
   igBlockAppPromo: true,
+  fbDailyLimitMin: 0,
+  fbLimitLock: true,
+  igDailyLimitMin: 0,
+  igLimitLock: true,
+  ytDailyLimitMin: 0,
+  ytLimitLock: true,
+  mpDailyLimitMin: 0,
+  mpLimitLock: true,
+  mpaDailyLimitMin: 0,
+  mpaLimitLock: true,
+  mpaStayInMarketplace: true,
+  mpaAllowMessages: true,
   mpGuestDismissLogin: true,
   mpGuestBlockLoginBar: true,
   mpGuestNativeShare: true,

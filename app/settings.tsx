@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -10,6 +11,8 @@ import {
 import type { FilterSettings } from '../src/lib/settings';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
+import type { UsageAppId } from '../src/lib/usage';
+import { formatMinutes, getTodaySeconds } from '../src/lib/usage';
 
 function ToggleRow({
   label,
@@ -33,6 +36,86 @@ function ToggleRow({
       </View>
       <Switch value={value} onValueChange={onChange} />
     </View>
+  );
+}
+
+const LIMIT_OPTIONS = [
+  { v: 0, l: 'Off' },
+  { v: 15, l: '15m' },
+  { v: 30, l: '30m' },
+  { v: 60, l: '1h' },
+  { v: 120, l: '2h' },
+  { v: 240, l: '4h' },
+];
+
+// The daily-usage rows at the foot of each app's block (Austin's
+// ask, 2026-11-23): today's time in that door, a chip row to set
+// the daily limit, and the lock/warn choice for what happens at
+// the cap. Time counts only while the door is open in Reely Free.
+function UsageLimitRows({
+  usedSec,
+  limitMin,
+  onChangeLimit,
+  lock,
+  onChangeLock,
+}: {
+  usedSec: number;
+  limitMin: number;
+  onChangeLimit: (v: number) => void;
+  lock: boolean;
+  onChangeLock: (v: boolean) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <>
+      <View style={[styles.row, { borderBottomColor: theme.border }]}>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowLabel, { color: theme.text }]}>
+            Daily limit
+          </Text>
+          <Text style={[styles.rowDetail, { color: theme.muted }]}>
+            Used today: {formatMinutes(usedSec)}. Time counts only
+            while this door is open in Reely Free — time in the real
+            app isn't tracked.
+          </Text>
+          <View style={styles.chipRow}>
+            {LIMIT_OPTIONS.map((o) => {
+              const active = limitMin === o.v;
+              return (
+                <Pressable
+                  key={o.v}
+                  onPress={() => onChangeLimit(o.v)}
+                  style={[
+                    styles.chip,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: active
+                        ? theme.accent
+                        : theme.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: active ? '#fff' : theme.text },
+                    ]}
+                  >
+                    {o.l}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+      <ToggleRow
+        label="Lock when the limit is reached"
+        detail="On: the door is covered for the rest of the day. Off: a warning banner shows from 5 minutes out instead, and the door keeps working."
+        value={lock}
+        onChange={onChangeLock}
+      />
+    </>
   );
 }
 
@@ -117,6 +200,38 @@ export default function SettingsScreen() {
     (key: keyof FilterSettings) =>
     (v: boolean) =>
       update({ [key]: v });
+  const setNum =
+    (key: keyof FilterSettings) =>
+    (v: number) =>
+      update({ [key]: v } as Partial<FilterSettings>);
+
+  // Today's usage per door, refreshed whenever Settings is opened.
+  const [usage, setUsage] = useState<
+    Partial<Record<UsageAppId, number>>
+  >({});
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      (async () => {
+        const ids: UsageAppId[] = [
+          'facebook',
+          'instagram',
+          'youtube',
+          'marketplace',
+          'marketplaceAccount',
+        ];
+        const entries = await Promise.all(
+          ids.map(
+            async (id) => [id, await getTodaySeconds(id)] as const,
+          ),
+        );
+        if (live) setUsage(Object.fromEntries(entries));
+      })();
+      return () => {
+        live = false;
+      };
+    }, []),
+  );
 
   // Manual collapse state for each section (view-only; the masters
   // above are the actual feature switches). Everything starts open.
@@ -136,6 +251,10 @@ export default function SettingsScreen() {
     !appsCollapsed &&
     settings.featureGuestMarketplace &&
     !isCollapsed('guest');
+  const showMpAccount =
+    !appsCollapsed &&
+    settings.featureMarketplaceAccount &&
+    !isCollapsed('mpaccount');
 
   return (
     <ScrollView
@@ -188,6 +307,13 @@ export default function SettingsScreen() {
                 value={settings.fbStickyHeader}
                 onChange={set('fbStickyHeader')}
               />
+              <UsageLimitRows
+                usedSec={usage.facebook ?? 0}
+                limitMin={settings.fbDailyLimitMin}
+                onChangeLimit={setNum('fbDailyLimitMin')}
+                lock={settings.fbLimitLock}
+                onChangeLock={set('fbLimitLock')}
+              />
             </>
           )}
 
@@ -224,6 +350,13 @@ export default function SettingsScreen() {
                 detail="Hides 'Open app' bars and similar get-the-app banners."
                 value={settings.igBlockAppPromo}
                 onChange={set('igBlockAppPromo')}
+              />
+              <UsageLimitRows
+                usedSec={usage.instagram ?? 0}
+                limitMin={settings.igDailyLimitMin}
+                onChangeLimit={setNum('igDailyLimitMin')}
+                lock={settings.igLimitLock}
+                onChangeLock={set('igLimitLock')}
               />
             </>
           )}
@@ -268,6 +401,13 @@ export default function SettingsScreen() {
                 value={settings.ytSwipeDownBack}
                 onChange={set('ytSwipeDownBack')}
               />
+              <UsageLimitRows
+                usedSec={usage.youtube ?? 0}
+                limitMin={settings.ytDailyLimitMin}
+                onChangeLimit={setNum('ytDailyLimitMin')}
+                lock={settings.ytLimitLock}
+                onChangeLock={set('ytLimitLock')}
+              />
             </>
           )}
 
@@ -298,6 +438,45 @@ export default function SettingsScreen() {
                 detail="Facebook's own share flow needs an account, so tapping Share on a listing opens your phone's share sheet with the listing's link instead — send it by text, mail, or anywhere else."
                 value={settings.mpGuestNativeShare}
                 onChange={set('mpGuestNativeShare')}
+              />
+              <UsageLimitRows
+                usedSec={usage.marketplace ?? 0}
+                limitMin={settings.mpDailyLimitMin}
+                onChangeLimit={setNum('mpDailyLimitMin')}
+                lock={settings.mpLimitLock}
+                onChangeLock={set('mpLimitLock')}
+              />
+            </>
+          )}
+
+          <FeatureHeader
+            title="Marketplace — with account"
+            detail="Your Facebook account, but only Marketplace — the rest of Facebook is ignored. Off = that door leaves the home screen."
+            value={settings.featureMarketplaceAccount}
+            onChange={set('featureMarketplaceAccount')}
+            collapsed={isCollapsed('mpaccount')}
+            onToggleCollapse={() => toggleCollapse('mpaccount')}
+          />
+          {showMpAccount && (
+            <>
+              <ToggleRow
+                label="Stay in Marketplace"
+                detail="Taps that would leave Marketplace — the feed, Watch, groups, profiles — do nothing, and anything that lands elsewhere on Facebook is sent back to Marketplace. Signing in still works normally."
+                value={settings.mpaStayInMarketplace}
+                onChange={set('mpaStayInMarketplace')}
+              />
+              <ToggleRow
+                label="Allow messages"
+                detail="Message threads stay reachable, so you can talk to buyers and sellers. Off = Marketplace only, no messages."
+                value={settings.mpaAllowMessages}
+                onChange={set('mpaAllowMessages')}
+              />
+              <UsageLimitRows
+                usedSec={usage.marketplaceAccount ?? 0}
+                limitMin={settings.mpaDailyLimitMin}
+                onChangeLimit={setNum('mpaDailyLimitMin')}
+                lock={settings.mpaLimitLock}
+                onChangeLock={set('mpaLimitLock')}
               />
             </>
           )}
@@ -391,6 +570,19 @@ const styles = StyleSheet.create({
     marginLeft: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  chipText: { fontSize: 14, fontWeight: '600' },
   rowText: { flex: 1, paddingRight: 12 },
   rowLabel: { fontSize: 16, fontWeight: '600' },
   rowDetail: { fontSize: 13, marginTop: 3, lineHeight: 18 },

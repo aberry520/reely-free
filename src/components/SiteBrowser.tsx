@@ -1,10 +1,17 @@
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Dimensions,
   Image,
   PanResponder,
@@ -19,6 +26,12 @@ import { WebView } from 'react-native-webview';
 import type { FilterSettings } from '../lib/settings';
 import { useSettings } from '../lib/settings';
 import { useTheme } from '../lib/theme';
+import {
+  addUsageSeconds,
+  formatLimit,
+  formatMinutes,
+  getTodaySeconds,
+} from '../lib/usage';
 
 interface SiteBrowserProps {
   homeUrl: string;
@@ -50,7 +63,12 @@ interface SiteBrowserProps {
   nativeShare?: boolean;
 }
 
-export type AppId = 'facebook' | 'instagram' | 'youtube' | 'marketplace';
+export type AppId =
+  | 'facebook'
+  | 'instagram'
+  | 'youtube'
+  | 'marketplace'
+  | 'marketplaceAccount';
 
 // The doors the floating control can hot-swap between (Austin's
 // ask, 2026-11-23): the fan lists the enabled ones besides the
@@ -59,7 +77,12 @@ export type AppId = 'facebook' | 'instagram' | 'youtube' | 'marketplace';
 const APPS: {
   id: AppId;
   label: string;
-  route: '/facebook' | '/instagram' | '/youtube' | '/marketplace';
+  route:
+    | '/facebook'
+    | '/instagram'
+    | '/youtube'
+    | '/marketplace'
+    | '/marketplace-account';
   color: string;
   enabled: (s: FilterSettings) => boolean;
 }[] = [
@@ -91,10 +114,47 @@ const APPS: {
     color: '#0f766e',
     enabled: (s) => s.featureGuestMarketplace,
   },
+  {
+    id: 'marketplaceAccount',
+    label: 'Marketplace — with account',
+    route: '/marketplace-account',
+    color: '#1e40af',
+    enabled: (s) => s.featureMarketplaceAccount,
+  },
 ];
 
 const BTN = 50;
 const BTN_POS_KEY = 'reelyfree-homebtn-v1';
+
+// Daily usage limits (Austin's ask, 2026-11-23): which settings keys
+// govern each door's limit — minutes per day (0 = no limit) and
+// whether hitting the cap locks the door or just warns.
+const LIMIT_CFG: Record<
+  AppId,
+  { min: keyof FilterSettings; lock: keyof FilterSettings; label: string }
+> = {
+  facebook: {
+    min: 'fbDailyLimitMin',
+    lock: 'fbLimitLock',
+    label: 'Facebook',
+  },
+  instagram: {
+    min: 'igDailyLimitMin',
+    lock: 'igLimitLock',
+    label: 'Instagram',
+  },
+  youtube: { min: 'ytDailyLimitMin', lock: 'ytLimitLock', label: 'YouTube' },
+  marketplace: {
+    min: 'mpDailyLimitMin',
+    lock: 'mpLimitLock',
+    label: 'Marketplace',
+  },
+  marketplaceAccount: {
+    min: 'mpaDailyLimitMin',
+    lock: 'mpaLimitLock',
+    label: 'Marketplace',
+  },
+};
 
 // One filtered site, full-screen: no header, no toolbar. The platform's real
 // mobile site with the filter layer injected before content loads. Login
@@ -147,6 +207,64 @@ export default function SiteBrowser({
   const script = useMemo(() => buildScript(settings), [buildScript, settings]);
 
   const goHome = () => router.navigate('/');
+
+  // --- Daily usage tracking + limits ---------------------------------
+  // Time counts only while this door is the focused screen AND the
+  // app is in the foreground — a door sitting under Home in the
+  // stack, or the app backgrounded, earns nothing. Seconds are
+  // banked into the usage store every 5s and on blur. At the cap:
+  // lock covers the door for the rest of the day; lock off shows a
+  // dismissible warning banner instead (from 5 minutes out).
+  const limitCfg = appId ? LIMIT_CFG[appId] : null;
+  const limitMin = limitCfg ? (settings[limitCfg.min] as number) : 0;
+  const limitLock = limitCfg
+    ? (settings[limitCfg.lock] as boolean)
+    : true;
+  const [usedSec, setUsedSec] = useState(0);
+  const [warnDismissed, setWarnDismissed] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!appId) return undefined;
+      let cancelled = false;
+      setWarnDismissed(false);
+      getTodaySeconds(appId)
+        .then((s) => {
+          if (!cancelled) setUsedSec(s);
+        })
+        .catch(() => {});
+      let pending = 0;
+      let last = Date.now();
+      const iv = setInterval(() => {
+        const now = Date.now();
+        if (AppState.currentState === 'active') {
+          pending += (now - last) / 1000;
+        }
+        last = now;
+        if (pending >= 5) {
+          const whole = Math.floor(pending);
+          pending -= whole;
+          addUsageSeconds(appId, whole);
+          setUsedSec((s) => s + whole);
+        }
+      }, 1000);
+      return () => {
+        cancelled = true;
+        clearInterval(iv);
+        if (pending >= 1) addUsageSeconds(appId, Math.floor(pending));
+      };
+    }, [appId]),
+  );
+
+  const limitSec = limitMin * 60;
+  const overLimit = limitMin > 0 && usedSec >= limitSec;
+  const remainingSec = limitSec - usedSec;
+  const showLock = overLimit && limitLock;
+  const showWarn =
+    limitMin > 0 &&
+    !limitLock &&
+    !warnDismissed &&
+    (overLimit || remainingSec <= 300);
 
   // In-page back (e.g. from a video back to the feed): the button only
   // appears when the WebView actually has somewhere to go back to. The
@@ -525,6 +643,53 @@ export default function SiteBrowser({
           </Text>
         </Pressable>
       )}
+      {showWarn && limitCfg && (
+        <View
+          style={[
+            styles.warnBanner,
+            { backgroundColor: theme.homeBtnBg, top: insets.top + 8 },
+          ]}
+        >
+          <Text style={[styles.warnText, { color: theme.homeBtnGlyph }]}>
+            {overLimit
+              ? `Over your ${limitCfg.label} limit — ${formatMinutes(usedSec)} today`
+              : `${Math.max(1, Math.ceil(remainingSec / 60))} min of ${limitCfg.label} left today`}
+          </Text>
+          <Pressable
+            accessibilityLabel="Dismiss usage warning"
+            onPress={() => setWarnDismissed(true)}
+            hitSlop={8}
+          >
+            <MaterialIcons name="close" size={16} color={theme.homeBtnGlyph} />
+          </Pressable>
+        </View>
+      )}
+      {showLock && limitCfg && (
+        <View
+          style={[
+            styles.lockOverlay,
+            { backgroundColor: theme.background },
+          ]}
+        >
+          <Image
+            source={require('../../assets/logo-full.png')}
+            style={styles.lockLogo}
+          />
+          <Text style={[styles.lockTitle, { color: theme.text }]}>
+            {limitCfg.label} time's up for today
+          </Text>
+          <Text style={[styles.lockDetail, { color: theme.muted }]}>
+            You've used {formatMinutes(usedSec)} of your{' '}
+            {formatLimit(limitMin)} daily limit. It resets tomorrow.
+          </Text>
+          <Pressable
+            style={[styles.lockButton, { backgroundColor: theme.accent }]}
+            onPress={goHome}
+          >
+            <Text style={styles.lockButtonText}>Go home</Text>
+          </Pressable>
+        </View>
+      )}
       {navCfg.bottomSwipe && (
         <View style={styles.grabberZone} {...bottomBar.panHandlers}>
           <View
@@ -671,6 +836,57 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  warnBanner: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '92%',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 12,
+  },
+  warnText: { fontSize: 13, fontWeight: '600' },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    zIndex: 15,
+  },
+  lockLogo: { width: 120, height: 120, borderRadius: 26 },
+  lockTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  lockDetail: {
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  lockButton: {
+    marginTop: 24,
+    paddingHorizontal: 26,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  lockButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   satellite: {
     position: 'absolute',
     width: 46,
