@@ -72,6 +72,12 @@ export default function SettingsScreen() {
         value={settings.ytBlockAppPromo}
         onChange={set('ytBlockAppPromo')}
       />
+      <ToggleRow
+        label="Swipe down on video to go back"
+        detail="Swipe down on the playing video to return to the feed, like the app. The video stops — the web version has no mini-player to shrink into."
+        value={settings.ytSwipeDownBack}
+        onChange={set('ytSwipeDownBack')}
+      />
 
       <Text style={[styles.section, { color: theme.text }]}>Facebook</Text>
       <ToggleRow

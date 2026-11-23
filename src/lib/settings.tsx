@@ -17,6 +17,7 @@ export interface FilterSettings {
   ytLandOnSubs: boolean;
   ytHideUpNext: boolean;
   ytBlockAppPromo: boolean;
+  ytSwipeDownBack: boolean;
   // Facebook
   fbBlockReels: boolean;
   fbHideSuggested: boolean;
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   ytLandOnSubs: true,
   ytHideUpNext: true,
   ytBlockAppPromo: true,
+  ytSwipeDownBack: true,
   fbBlockReels: true,
   fbHideSuggested: true,
   fbHideSponsored: true,

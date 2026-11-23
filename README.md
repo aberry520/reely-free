@@ -8,6 +8,10 @@ stack as Reseller HQ.
   Subscriptions instead of the recommendation feed, no Up Next rail. A
   Shorts link someone sends opens as a normal watch page. The "Get the best
   experience" app popup and the header's Open App button are hidden too.
+  Swiping down on a playing video goes back to the feed, like the app's
+  mini-player gesture — except the video stops, because the web player
+  can't float over the page (the one thing the real app does that a
+  WebView can't).
 - **Facebook**: no Reels, no "Suggested for you" posts, no sponsored posts,
   and the "Open app" bar at the bottom of the feed is hidden. Feed, groups
   and **Marketplace** stay. Messenger stays in its own app.
