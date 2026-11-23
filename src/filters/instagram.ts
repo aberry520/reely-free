@@ -1,4 +1,5 @@
 import type { FilterSettings } from '../lib/settings';
+import { LOGO_FULL_DATA_URI } from './logo-data';
 
 // Builds the JavaScript injected into instagram.com before page content
 // loads. Stable hooks only (URLs, visible label text) instead of class
@@ -18,8 +19,8 @@ import type { FilterSettings } from '../lib/settings';
 // - The Reels feed redirects home and its nav entry is hidden
 //   (unchanged from v1 — that part never caused trouble). Explore is
 //   different (his follow-up, 2026-11-23): Search lives ON the Explore
-//   page, so the page and its nav entry stay — instead a plain
-//   "Reely Free" cover sits over the browse grid under the search
+//   page, so the page and its nav entry stay — instead a Reely
+//   Free logo cover sits over the browse grid under the search
 //   bar (the grid itself is left untouched underneath), leaving a
 //   working search page with no content to fall into. Search results
 //   themselves are deliberate, so they show normally.
@@ -39,10 +40,12 @@ export function buildInstagramScript(settings: FilterSettings): string {
     blockSuggested: settings.igHideSuggested,
     blockAppPromo: settings.igBlockAppPromo,
   });
+  const logo = JSON.stringify(LOGO_FULL_DATA_URI);
 
   return `
 (function () {
   var S = ${s};
+  var LOGO = ${logo};
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
@@ -70,14 +73,20 @@ export function buildInstagramScript(settings: FilterSettings): string {
       if (!cover) {
         cover = document.createElement('div');
         cover.id = 'rf-explore-cover';
-        var title = document.createElement('div');
-        title.textContent = 'Reely Free';
-        title.style.cssText =
-          'font-size:30px;font-weight:800;letter-spacing:0.2px;';
+        // The placeholder where content was removed carries the
+        // logo (Austin, 2026-11-23): the full mark + wordmark as an
+        // image — WebView pages can't reach local app assets, so it
+        // rides in as a data URI (see logo-data.ts).
+        var logoImg = document.createElement('img');
+        logoImg.src = LOGO;
+        logoImg.alt = 'Reely Free';
+        logoImg.style.cssText =
+          'width:min(210px,58vw);height:auto;border-radius:26px;' +
+          'display:block;';
         var sub = document.createElement('div');
         sub.textContent = 'Explore is off — search above still works.';
-        sub.style.cssText = 'font-size:15px;opacity:0.65;margin-top:8px;';
-        cover.appendChild(title);
+        sub.style.cssText = 'font-size:15px;opacity:0.65;margin-top:14px;';
+        cover.appendChild(logoImg);
         cover.appendChild(sub);
         cover.style.cssText =
           'position:fixed;left:0;right:0;z-index:999;' +

@@ -1,6 +1,13 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
@@ -36,7 +43,15 @@ export default function HomeScreen() {
         { paddingTop: insets.top + 24 },
       ]}
     >
-      <Text style={[styles.title, { color: theme.text }]}>Reely Free</Text>
+      <View style={styles.headerRow}>
+        {/* Header mark: the icon-only logo, no text version
+            (Austin, 2026-11-23). */}
+        <Image
+          source={require('../assets/logo-mark.png')}
+          style={styles.headerMark}
+        />
+        <Text style={[styles.title, { color: theme.text }]}>Reely Free</Text>
+      </View>
       <Text style={[styles.subtitle, { color: theme.muted }]}>
         Your social apps, without the hooks.
       </Text>
@@ -114,6 +129,8 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 20, paddingBottom: 24 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerMark: { width: 46, height: 46, borderRadius: 11 },
   title: { fontSize: 32, fontWeight: '800' },
   subtitle: { fontSize: 16, marginTop: 6, marginBottom: 28 },
   card: {

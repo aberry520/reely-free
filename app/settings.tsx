@@ -209,7 +209,7 @@ export default function SettingsScreen() {
               />
               <ToggleRow
                 label="Hide Explore content"
-                detail="Search lives on the Explore page, so the page and its button stay — a plain Reely Free cover sits over the browse grid under the search bar instead. Search itself, and its results, work normally."
+                detail="Search lives on the Explore page, so the page and its button stay — a Reely Free logo cover sits over the browse grid under the search bar instead. Search itself, and its results, work normally."
                 value={settings.igHideExplore}
                 onChange={set('igHideExplore')}
               />

@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { SettingsProvider, useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
 
@@ -59,6 +60,24 @@ function AppStack() {
           name="settings"
           options={{
             title: 'Settings',
+            // Header mark: the icon-only logo beside the title
+            // (Austin, 2026-11-23).
+            headerTitle: () => (
+              <View style={styles.headerTitle}>
+                <Image
+                  source={require('../assets/logo-mark.png')}
+                  style={styles.headerMark}
+                />
+                <Text
+                  style={[
+                    styles.headerTitleText,
+                    { color: theme.text },
+                  ]}
+                >
+                  Settings
+                </Text>
+              </View>
+            ),
             headerStyle: { backgroundColor: theme.background },
             headerTintColor: theme.text,
             headerShadowVisible: false,
@@ -76,3 +95,9 @@ export default function RootLayout() {
     </SettingsProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerMark: { width: 28, height: 28, borderRadius: 7 },
+  headerTitleText: { fontSize: 17, fontWeight: '600' },
+});
