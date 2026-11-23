@@ -208,8 +208,8 @@ export default function SettingsScreen() {
                 onChange={set('igBlockReels')}
               />
               <ToggleRow
-                label="Hide Explore"
-                detail="Hides the Explore entry, and the Explore page sends you home instead."
+                label="Hide Explore content"
+                detail="Search lives on the Explore page, so the page and its button stay — but the browse grid of posts and reels under the search bar is hidden. Search itself, and its results, work normally."
                 value={settings.igHideExplore}
                 onChange={set('igHideExplore')}
               />

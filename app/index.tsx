@@ -61,8 +61,9 @@ export default function HomeScreen() {
         >
           <Text style={styles.cardTitle}>Instagram</Text>
           <Text style={styles.cardDetail}>
-            No Explore, and no falling into Reels or suggested posts — they
-            show in the feed but won't open. Profiles, messages and search stay.
+            No falling into Reels or suggested posts — they show in the
+            feed but won't open. Explore keeps its search, without the
+            browse grid. Profiles and messages stay.
           </Text>
         </Pressable>
       )}

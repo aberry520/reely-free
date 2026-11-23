@@ -15,8 +15,13 @@ import type { FilterSettings } from '../lib/settings';
 // So v3 hides NOTHING in the feed: reels and suggested posts show
 // like everything else. Instead, the endless-scroll surfaces are
 // closed off:
-// - The Reels feed and Explore redirect home; their nav entries are
-//   hidden (unchanged from v1 — that part never caused trouble).
+// - The Reels feed redirects home and its nav entry is hidden
+//   (unchanged from v1 — that part never caused trouble). Explore is
+//   different (his follow-up, 2026-11-23): Search lives ON the Explore
+//   page, so the page and its nav entry stay — instead the browse
+//   grid under the search bar is hidden, leaving a working search
+//   page with no content to fall into. Search results themselves are
+//   deliberate, so they show normally.
 // - Tapping a reel anywhere (feed, profile, search) is intercepted
 //   and does nothing, so you can't fall into the swipe-through reel
 //   viewer. Direct /reel/<id>/ URLs redirect home too.
@@ -42,6 +47,47 @@ export function buildInstagramScript(settings: FilterSettings): string {
       el.setAttribute('data-rf-hidden', '1');
       el.style.setProperty('display', 'none', 'important');
     }
+  }
+  // Explore grid hiding: on the plain Explore page, find the browse
+  // grid (the container holding many post/reel links) and hide it —
+  // but never a container that also holds the search box, which sits
+  // at the top and must stay usable. Marked with data-rf-explore as
+  // well as the usual marker, so leaving the page can undo exactly
+  // these hides if Instagram reuses the container elsewhere (e.g.
+  // for search results).
+  function hideExploreGrid() {
+    try {
+      var links = document.querySelectorAll(
+        'a[href^="/p/"], a[href^="/reel/"], a[href^="/reels/"]'
+      );
+      if (links.length < 4) return;
+      var el = links[0];
+      var best = null;
+      var depth = 0;
+      while (el && depth < 10) {
+        el = el.parentElement; depth++;
+        if (!el) break;
+        if (el.querySelector && el.querySelector('input')) break;
+        var count = el.querySelectorAll
+          ? el.querySelectorAll('a[href^="/p/"], a[href^="/reel/"], a[href^="/reels/"]').length
+          : 0;
+        if (count >= 4) best = el;
+      }
+      if (best && !best.getAttribute('data-rf-hidden')) {
+        best.setAttribute('data-rf-explore', '1');
+        hide(best);
+      }
+    } catch (e) {}
+  }
+  function unhideExploreGrid() {
+    try {
+      var marked = document.querySelectorAll('[data-rf-explore]');
+      for (var i = 0; i < marked.length; i++) {
+        marked[i].removeAttribute('data-rf-explore');
+        marked[i].removeAttribute('data-rf-hidden');
+        marked[i].style.removeProperty('display');
+      }
+    } catch (e) {}
   }
   // Hide the full-width bar a get-the-app button sits in.
   function hideBar(node) {
@@ -103,16 +149,22 @@ export function buildInstagramScript(settings: FilterSettings): string {
         location.replace('/');
         return;
       }
-      if (S.hideExplore && (path === '/explore' || path.indexOf('/explore/') === 0)) {
-        location.replace('/');
-        return;
+      // Explore: the page stays (Search lives there) — only its
+      // browse grid is hidden, and only on the plain Explore page,
+      // never on search results. Anywhere else, undo an explore hide
+      // in case the container got reused.
+      var onExplore = path === '/explore' || path === '/explore/';
+      if (S.hideExplore && onExplore) {
+        hideExploreGrid();
+      } else {
+        unhideExploreGrid();
       }
-      // Nav entries that lead to Reels / Explore: hide the entry.
-      // (Nav is static chrome, not feed content — hiding it never
-      // caused the scrolling problem.)
+      // Nav entries that lead to Reels: hide the entry. (Nav is
+      // static chrome, not feed content — hiding it never caused
+      // the scrolling problem. The Explore entry stays: it's the
+      // way into Search.)
       var navSel = [];
       if (S.blockReels) navSel.push('a[href="/reels/"], a[href^="/reels/"], [aria-label="Reels"]');
-      if (S.hideExplore) navSel.push('a[href="/explore/"], a[href^="/explore/"], [aria-label="Explore"]');
       if (navSel.length) {
         var navEls = document.querySelectorAll(navSel.join(', '));
         for (var i = 0; i < navEls.length; i++) {
