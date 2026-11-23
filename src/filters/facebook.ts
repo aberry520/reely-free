@@ -132,9 +132,10 @@ export function buildFacebookScript(settings: FilterSettings): string {
   // no posts, and holds several controls including a home link or a
   // search box. The app header is TWO rows (wordmark bar + nav tab bar),
   // so from the first bar we climb to the container holding both rows
-  // (at most ~150px tall) and pin that; if the rows share no container,
-  // the second row is found directly below the first and pinned under
-  // it. Two cases are handled: a header that scrolls away with the page
+  // (at most ~150px tall) and pin that; if the tab row lives elsewhere,
+  // it is found by its link signature — it is the only element that
+  // groups Marketplace / Watch / Notifications / Groups destinations
+  // together — and pinned directly underneath the first bar. Two cases are handled: a header that scrolls away with the page
   // (we pin it ourselves, with padding on the parent so the feed doesn't
   // jump), and a header Facebook already keeps fixed but hides on scroll
   // down (we force it back into view on scroll up and hand it back on
@@ -158,7 +159,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
     function findHeader() {
       if (items) return items;
       try {
-        var all = document.querySelectorAll('div, header, nav, section');
+        var all = document.querySelectorAll('div, header, nav, section, ul');
         var bar = null, barRect = null;
         for (var i = 0; i < all.length; i++) {
           var el = all[i];
@@ -186,23 +187,36 @@ export function buildFacebookScript(settings: FilterSettings): string {
         var pos = '';
         try { pos = window.getComputedStyle(box).position; } catch (e) {}
         hdrMode = (pos === 'fixed' || pos === 'sticky') ? 'site' : 'flow';
-        items = [{ el: box, parent: box.parentElement, height: box.getBoundingClientRect().height, top: 0 }];
-        // No climb happened and the container is just the one row: look
-        // for the nav tab row sitting directly beneath it and pin it too.
-        if (box === bar) {
-          for (var j = 0; j < all.length; j++) {
-            var el2 = all[j];
-            if (el2 === bar || bar.contains(el2)) continue;
-            var r2 = el2.getBoundingClientRect();
-            if (r2.height < 30 || r2.height > 96) continue;
-            if (r2.width < window.innerWidth * 0.95) continue;
-            var ot = offsetTopOf(el2);
-            if (ot < barRect.height - 10 || ot > barRect.height + 14) continue;
-            if (el2.querySelector && el2.querySelector('[role="article"]')) continue;
-            if (el2.querySelectorAll('a, button, [role="button"]').length < 3) continue;
-            items.push({ el: el2, parent: el2.parentElement, height: r2.height, top: barRect.height });
-            break;
+        var boxHeight = box.getBoundingClientRect().height;
+        items = [{ el: box, parent: box.parentElement, height: boxHeight, top: 0 }];
+        // If the nav tab row is not inside what we pinned, find it by
+        // its link signature and pin it directly underneath.
+        var tab = null, tabHeight = 0;
+        for (var j = 0; j < all.length; j++) {
+          var el2 = all[j];
+          if (el2 === box || box.contains(el2)) continue;
+          var r2 = el2.getBoundingClientRect();
+          if (r2.height < 28 || r2.height > 80) continue;
+          if (r2.width < window.innerWidth * 0.95) continue;
+          var ot2 = offsetTopOf(el2);
+          if (ot2 < boxHeight - 24 || ot2 > boxHeight + 64) continue;
+          if (el2.querySelector && el2.querySelector('[role="article"]')) continue;
+          var kinds = 0, seen = {};
+          var links2 = el2.querySelectorAll('a');
+          for (var m2 = 0; m2 < links2.length; m2++) {
+            var h = links2[m2].getAttribute('href') || '';
+            var kind = h.indexOf('marketplace') >= 0 ? 'mp'
+              : h.indexOf('/watch') >= 0 ? 'w'
+              : h.indexOf('notifications') >= 0 ? 'n'
+              : h.indexOf('/groups') >= 0 ? 'g'
+              : h.indexOf('friends') >= 0 ? 'f' : '';
+            if (kind && !seen[kind]) { seen[kind] = 1; kinds++; }
           }
+          if (kinds < 2 && links2.length < 4) continue;
+          if (!tab || r2.height < tabHeight) { tab = el2; tabHeight = r2.height; }
+        }
+        if (tab) {
+          items.push({ el: tab, parent: tab.parentElement, height: tabHeight, top: boxHeight });
         }
         totalHeight = 0;
         for (var k = 0; k < items.length; k++) totalHeight += items[k].height;
