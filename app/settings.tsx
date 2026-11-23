@@ -254,6 +254,12 @@ export default function SettingsScreen() {
                 value={settings.mpGuestBlockLoginBar}
                 onChange={set('mpGuestBlockLoginBar')}
               />
+              <ToggleRow
+                label="Share via the phone's share sheet"
+                detail="Facebook's own share flow needs an account, so tapping Share on a listing opens your phone's share sheet with the listing's link instead — send it by text, mail, or anywhere else."
+                value={settings.mpGuestNativeShare}
+                onChange={set('mpGuestNativeShare')}
+              />
             </>
           )}
         </>

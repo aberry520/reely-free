@@ -38,6 +38,7 @@ export default function MarketplaceGuestScreen() {
   return (
     <SiteBrowser
       appId="marketplace"
+      nativeShare
       homeUrl="https://www.facebook.com/marketplace/"
       buildScript={buildMarketplaceGuestScript}
       userAgent={DESKTOP_UA}

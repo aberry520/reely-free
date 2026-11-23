@@ -44,6 +44,7 @@ export interface FilterSettings {
   // inside Marketplace's own location dialog.
   mpGuestDismissLogin: boolean;
   mpGuestBlockLoginBar: boolean;
+  mpGuestNativeShare: boolean;
   // Ways to get back home from a site screen (Austin's picks, 2026-11-22)
   navButton: boolean;
   navBottomSwipe: boolean;
@@ -68,6 +69,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   fbStickyHeader: true,
   mpGuestDismissLogin: true,
   mpGuestBlockLoginBar: true,
+  mpGuestNativeShare: true,
   // Bottom swipe defaults OFF: iOS grabs the whole bottom edge for its own
   // home gesture, so it was inconsistent in his on-device test. The other
   // three default on.

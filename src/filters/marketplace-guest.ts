@@ -25,12 +25,74 @@ export function buildMarketplaceGuestScript(
     enabled: settings.featureGuestMarketplace,
     dismissLogin: settings.mpGuestDismissLogin,
     blockLoginBar: settings.mpGuestBlockLoginBar,
+    nativeShare: settings.mpGuestNativeShare,
   });
 
   return `
 (function () {
   var S = ${s};
-  if (!S.enabled || (!S.dismissLogin && !S.blockLoginBar)) { true; return; }
+  if (!S.enabled || (!S.dismissLogin && !S.blockLoginBar && !S.nativeShare)) { true; return; }
+  // Native share (Austin's ask, 2026-11-23): Facebook's own share
+  // flow is useless logged out — its dialog wants an account. So a
+  // tap on a Share control never reaches Facebook: the click is
+  // captured first, the listing's link is resolved (the item link of
+  // the card the button belongs to; on a listing page, the page
+  // itself; a sharer link's target if that's what was tapped), and
+  // the link is posted out to the app, which opens the phone's own
+  // share sheet with it. Installed once, independent of the apply()
+  // loop below.
+  if (S.nativeShare) {
+    try {
+      document.addEventListener('click', function (ev) {
+        try {
+          if (location.pathname.indexOf('/marketplace/') < 0) return;
+          var t = ev.target;
+          var ctrl = t && t.closest
+            ? t.closest('a, button, [role="button"], [role="menuitem"]')
+            : null;
+          if (!ctrl) return;
+          var url = null;
+          var href = ctrl.getAttribute && ctrl.getAttribute('href');
+          if (href && (href.indexOf('/sharer/') >= 0 ||
+                       href.indexOf('dialog/share') >= 0 ||
+                       href.indexOf('/share/') >= 0)) {
+            try {
+              var u = new URL(href, location.origin);
+              url = u.searchParams.get('u') || u.searchParams.get('href') || null;
+            } catch (e) {}
+          }
+          if (!url) {
+            var label = ((ctrl.getAttribute && ctrl.getAttribute('aria-label')) || '').trim().toLowerCase();
+            var text = (ctrl.textContent || '').trim().toLowerCase();
+            var isShare = label === 'share' || text === 'share' ||
+              label.indexOf('share ') === 0 || text.indexOf('share ') === 0 ||
+              label.indexOf('share:') === 0 || text.indexOf('share:') === 0;
+            if (!isShare) return;
+            var el = ctrl;
+            var guard = 0;
+            while (el && guard < 14 && !url) {
+              guard++;
+              var a = el.querySelector
+                ? el.querySelector('a[href*="/marketplace/item/"]')
+                : null;
+              if (a) url = a.href;
+              el = el.parentElement;
+            }
+            if (!url) url = location.href;
+          }
+          if (!url || url.indexOf('http') !== 0) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(
+              JSON.stringify({ type: 'rf-share', url: url })
+            );
+          }
+        } catch (e) {}
+      }, true);
+    } catch (e) {}
+  }
   // Persistent hide: an inline display:none can be wiped when Facebook's
   // React re-renders the node (his recording, 2026-11-23: the panel was
   // hidden, then popped back). A stylesheet rule keyed on the marker

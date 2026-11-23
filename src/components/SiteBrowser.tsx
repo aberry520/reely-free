@@ -8,6 +8,7 @@ import {
   Dimensions,
   PanResponder,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -41,6 +42,11 @@ interface SiteBrowserProps {
   // Which door this is — the home button's long-press switcher lists
   // the OTHER enabled doors, so it needs to know the current one.
   appId?: AppId;
+  // The page's filter script can post {type:'rf-share', url} when the
+  // user taps a Share control whose own flow won't work (the guest
+  // Marketplace door: Facebook's share dialog wants a login). The app
+  // answers with the phone's own share sheet carrying that link.
+  nativeShare?: boolean;
 }
 
 export type AppId = 'facebook' | 'youtube' | 'marketplace';
@@ -109,6 +115,7 @@ export default function SiteBrowser({
   resettable,
   blockUrlFragments,
   appId,
+  nativeShare,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   // Getting Home has no feature master (Austin's hierarchy,
@@ -450,6 +457,27 @@ export default function SiteBrowser({
           setCanGoBack(nav.canGoBack);
           setCurrentUrl(nav.url);
         }}
+        onMessage={
+          nativeShare
+            ? (event) => {
+                try {
+                  const data = JSON.parse(event.nativeEvent.data) as {
+                    type?: string;
+                    url?: string;
+                  };
+                  if (
+                    data.type === 'rf-share' &&
+                    typeof data.url === 'string' &&
+                    data.url.startsWith('https://')
+                  ) {
+                    Share.share({ url: data.url }).catch(() => {});
+                  }
+                } catch {
+                  // Not one of ours — ignore.
+                }
+              }
+            : undefined
+        }
         onShouldStartLoadWithRequest={(req) => {
           // Nothing leaves the app: app schemes (fb://, youtube://,
           // intent:, …) and app-store links are refused outright, so even
