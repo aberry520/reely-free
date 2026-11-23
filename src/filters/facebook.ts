@@ -272,6 +272,37 @@ export function buildFacebookScript(settings: FilterSettings): string {
       headerRow.appendChild(buildCover(Math.round(bottom - top)));
     } catch (e) {}
   }
+  // Is this video sitting inside the full-screen viewer layer?
+  // The viewer (whether it opens as its own page or as an overlay
+  // on the feed) wraps the video in a fixed/absolute layer that
+  // covers nearly the whole viewport. A feed video — however big
+  // the post is — lives in normal flow and never has such an
+  // ancestor. This, not the video's size, is the reliable line
+  // between "in the feed" and "clicked into the video".
+  function videoInViewerLayer(vid) {
+    try {
+      var el = vid, depth = 0;
+      while (el && depth < 10) {
+        var cs = window.getComputedStyle(el);
+        if (cs && (cs.position === 'fixed' || cs.position === 'absolute')) {
+          var r = el.getBoundingClientRect();
+          if (r.width >= window.innerWidth * 0.9 &&
+              r.height >= window.innerHeight * 0.85) return true;
+        }
+        el = el.parentElement; depth++;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function inViewer(vid) {
+    try {
+      if (/^\\/reel\\//.test(location.pathname)) return true;
+      if (location.pathname.indexOf('video.php') >= 0) return true;
+      if (location.pathname.indexOf('/watch') === 0 &&
+          /[?&]v=/.test(location.search)) return true;
+    } catch (e) {}
+    return videoInViewerLayer(vid);
+  }
   // Walk up from a link to a plausible card container and hide that.
   function hideCard(node) {
     var el = node, depth = 0, best = node;
@@ -326,14 +357,14 @@ export function buildFacebookScript(settings: FilterSettings): string {
         }
       } catch (err) {}
     }, true);
-    // Swipe disabling: in the full-screen viewer the video fills
-    // most of the viewport, and a vertical drag on it is the
-    // swipe-to-next gesture. Swallow vertical touchmoves that
-    // land on that big video (capture phase, before Facebook's
-    // own handlers see them). Everything else is untouched:
-    // taps (play/pause), horizontal drags (the seek bar), feed
-    // scrolling, and scrolling comments — the gate is the video
-    // being viewer-sized, which a feed video never is.
+    // Swipe disabling: inside the viewer, a vertical drag on the
+    // video is the swipe-to-next gesture. Swallow vertical
+    // touchmoves that land on the video while the viewer is open
+    // (capture phase, before Facebook's own handlers see them).
+    // Everything else is untouched: taps (play/pause), horizontal
+    // drags (the seek bar), feed scrolling, and scrolling
+    // comments. "Inside the viewer" is decided by inViewer() —
+    // route or full-screen layer, never the video's size.
     // Austin's alternative, kept as feedback on top of the
     // block: when a swipe is swallowed, flash the Reely Free
     // icon in the middle of the viewer for a moment, so the
@@ -388,11 +419,14 @@ export function buildFacebookScript(settings: FilterSettings): string {
           if (wrap && wrap.querySelector) vid = wrap.querySelector('video');
         }
         if (!vid) return;
-        var vr = vid.getBoundingClientRect();
-        // Viewer-sized only: at least 90% of the width and 55%
-        // of the height of the viewport.
-        if (vr.width < window.innerWidth * 0.9 ||
-            vr.height < window.innerHeight * 0.55) return;
+        // ONLY inside the viewer: a single-video route, or the
+        // video living in the full-screen viewer layer. A big
+        // video in the feed is neither — the first build gated
+        // on the video's size alone, and large feed videos pass
+        // that easily, so the block (and the icon flash) fired
+        // mid-feed and ate feed scrolling (Austin's recording).
+        // The feed must never be touched.
+        if (!inViewer(vid)) return;
         var dx = e.touches[0].clientX - swipeStart.x;
         var dy = e.touches[0].clientY - swipeStart.y;
         if (Math.abs(dy) < 12 || Math.abs(dy) <= Math.abs(dx)) return;
@@ -479,7 +513,23 @@ export function buildFacebookScript(settings: FilterSettings): string {
             location.pathname.indexOf('video.php') >= 0 ||
             (location.pathname.indexOf('/watch') === 0 &&
              /[?&]v=/.test(location.search));
-          var heads = onViewer ? [] : document.querySelectorAll(
+          // The overlay form of the viewer keeps the feed URL,
+          // so the route check can't see it — but a video inside
+          // a full-screen layer gives it away. While any viewer
+          // is open the sweep stands down completely: the
+          // viewer's own "Reels" title bar was covered by this
+          // sweep in Austin's recording, hiding the very video
+          // he had clicked into.
+          var viewerOpen = onViewer;
+          if (!viewerOpen) {
+            var allVids = document.querySelectorAll('video');
+            for (var av = 0; av < allVids.length; av++) {
+              if (videoInViewerLayer(allVids[av])) {
+                viewerOpen = true; break;
+              }
+            }
+          }
+          var heads = viewerOpen ? [] : document.querySelectorAll(
             'div, span, h2, h3, h4, [role="heading"]');
           for (var hh = 0; hh < heads.length; hh++) {
             var hd = heads[hh];
