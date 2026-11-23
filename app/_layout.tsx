@@ -9,6 +9,11 @@ import { useTheme } from '../src/lib/theme';
 //
 // The left-edge swipe on the site screens is the stack's built-in iOS back
 // gesture; it follows his "swipe from left edge" setting.
+//
+// The site screens use slide_from_left (his pick, 2026-11-22): going home
+// slides the site out to the left instead of the usual iOS right, and
+// opening a site slides it in from the left to match — the animation
+// applies to both directions, there's no exit-only setting.
 function AppStack() {
   const theme = useTheme();
   const { settings } = useSettings();
@@ -22,6 +27,7 @@ function AppStack() {
           options={{
             headerShown: false,
             gestureEnabled: settings.navLeftEdge,
+            animation: 'slide_from_left',
           }}
         />
         <Stack.Screen
@@ -29,6 +35,7 @@ function AppStack() {
           options={{
             headerShown: false,
             gestureEnabled: settings.navLeftEdge,
+            animation: 'slide_from_left',
           }}
         />
         <Stack.Screen
