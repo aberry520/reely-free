@@ -1,9 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
   PanResponder,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,21 +21,23 @@ interface SiteBrowserProps {
   buildScript: (settings: FilterSettings) => string;
 }
 
+const BTN = 50;
+const BTN_POS_KEY = 'reelyfree-homebtn-v1';
+
 // One filtered site, full-screen: no header, no toolbar. The platform's real
 // mobile site with the filter layer injected before content loads. Login
 // cookies persist in the WebView, so signing in is a one-time thing per site.
 //
-// To get back home he swipes up on the bar at the bottom center — the same
-// motion as the iPhone's home gesture, which iOS reserves for itself at the
-// very edge of the screen, so the app's bar sits just above it. A tap on the
-// bar works too.
+// Getting home: the iOS left-edge swipe (the stack's built-in back gesture)
+// works, and a translucent floating home button is always on screen. The
+// button can be dragged anywhere and snaps to the nearest side; its spot is
+// remembered across both sites. A tap on it goes home.
 export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const webRef = useRef<WebView>(null);
-  const swipedRef = useRef(false);
 
   // Rebuild (and remount) the WebView when the toggles change so the new
   // rules are the ones injected from the very first paint.
@@ -39,24 +45,83 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
 
   const goHome = () => router.navigate('/');
 
-  const grabber = useMemo(
+  // --- Draggable floating home button -------------------------------------
+  const win = Dimensions.get('window');
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const posRef = useRef({ x: 0, y: 0 });
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const [btnReady, setBtnReady] = useState(false);
+
+  useEffect(() => {
+    const fallback = {
+      x: win.width - BTN - 16,
+      y: win.height - BTN - 140,
+    };
+    AsyncStorage.getItem(BTN_POS_KEY)
+      .then((raw) => {
+        let pos = fallback;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as { x?: number; y?: number };
+            if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+              pos = {
+                x: Math.min(Math.max(parsed.x, 0), win.width - BTN),
+                y: Math.min(Math.max(parsed.y, 0), win.height - BTN),
+              };
+            }
+          } catch {
+            // Corrupt saved position: use the fallback.
+          }
+        }
+        posRef.current = pos;
+        pan.setValue(pos);
+        setBtnReady(true);
+      })
+      .catch(() => {
+        posRef.current = fallback;
+        pan.setValue(fallback);
+        setBtnReady(true);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const btnPan = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          swipedRef.current = false;
+          dragStartRef.current = { ...posRef.current };
         },
         onPanResponderMove: (_, g) => {
-          if (!swipedRef.current && g.dy <= -45) {
-            swipedRef.current = true;
-            goHome();
-          }
+          pan.setValue({
+            x: dragStartRef.current.x + g.dx,
+            y: dragStartRef.current.y + g.dy,
+          });
         },
         onPanResponderRelease: (_, g) => {
-          // A plain tap on the bar goes home too.
-          if (!swipedRef.current && Math.abs(g.dy) < 8 && Math.abs(g.dx) < 8) {
+          if (Math.hypot(g.dx, g.dy) < 8) {
             goHome();
+            return;
           }
+          const movedX = dragStartRef.current.x + g.dx;
+          const movedY = dragStartRef.current.y + g.dy;
+          const maxY = win.height - insets.top - BTN - 16;
+          const target = {
+            x:
+              movedX + BTN / 2 < win.width / 2
+                ? 12
+                : win.width - BTN - 12,
+            y: Math.min(Math.max(movedY, 8), maxY),
+          };
+          posRef.current = target;
+          Animated.spring(pan, {
+            toValue: target,
+            useNativeDriver: false,
+            friction: 7,
+          }).start();
+          AsyncStorage.setItem(BTN_POS_KEY, JSON.stringify(target)).catch(
+            () => {},
+          );
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,11 +164,23 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
           </View>
         )}
       />
-      <View style={styles.grabberZone} {...grabber.panHandlers}>
-        <View
-          style={[styles.grabberPill, { backgroundColor: theme.grabber }]}
-        />
-      </View>
+      {btnReady && (
+        <Animated.View
+          {...btnPan.panHandlers}
+          accessibilityLabel="Go home"
+          style={[
+            styles.homeBtn,
+            {
+              backgroundColor: theme.homeBtnBg,
+              transform: pan.getTranslateTransform(),
+            },
+          ]}
+        >
+          <Text style={[styles.homeBtnGlyph, { color: theme.homeBtnGlyph }]}>
+            ⌂
+          </Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -119,21 +196,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // A small touch target at the bottom center, over the site's own bottom
-  // bar — the pill is drawn at the same spot as the iPhone home indicator.
-  grabberZone: {
+  homeBtn: {
     position: 'absolute',
-    bottom: 0,
-    alignSelf: 'center',
-    width: 180,
-    height: 40,
+    left: 0,
+    top: 0,
+    width: BTN,
+    height: BTN,
+    borderRadius: BTN / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 9,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
   },
-  grabberPill: {
-    width: 134,
-    height: 5,
-    borderRadius: 3,
+  homeBtnGlyph: {
+    fontSize: 27,
+    lineHeight: 30,
+    marginTop: -3,
   },
 });

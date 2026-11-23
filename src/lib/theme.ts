@@ -12,7 +12,8 @@ export interface Theme {
   muted: string;
   border: string;
   accent: string;
-  grabber: string;
+  homeBtnBg: string;
+  homeBtnGlyph: string;
 }
 
 const LIGHT: Theme = {
@@ -23,7 +24,8 @@ const LIGHT: Theme = {
   muted: '#555555',
   border: '#dddddd',
   accent: '#0a5cff',
-  grabber: 'rgba(0, 0, 0, 0.35)',
+  homeBtnBg: 'rgba(0, 0, 0, 0.45)',
+  homeBtnGlyph: '#ffffff',
 };
 
 const DARK: Theme = {
@@ -34,7 +36,8 @@ const DARK: Theme = {
   muted: '#a1a1a6',
   border: '#38383a',
   accent: '#4da3ff',
-  grabber: 'rgba(255, 255, 255, 0.45)',
+  homeBtnBg: 'rgba(255, 255, 255, 0.32)',
+  homeBtnGlyph: '#111111',
 };
 
 export function useTheme(): Theme {

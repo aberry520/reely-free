@@ -11,9 +11,11 @@ stack as Reseller HQ.
   Feed, groups and **Marketplace** stay. Messenger stays in its own app.
 - **Settings**: per-platform toggles, saved on the device.
 - **Feel**: the app follows the phone's light/dark setting (the sites do
-  too). Facebook and YouTube open full-screen — no header, no toolbar — and
-  a swipe up on the bar at the bottom center (same motion as the iPhone home
-  gesture) goes back to the app's home screen. A tap on the bar works too.
+  too). Facebook and YouTube open full-screen — no header, no toolbar. To go
+  home, swipe in from the left edge (iOS's back gesture) or tap the
+  translucent floating home button; the button can be dragged anywhere, snaps
+  to the nearest side, and remembers its spot. (A swipe up from the bottom
+  doesn't work — iOS reserves the whole bottom edge for itself.)
 
 The filters are injected JavaScript (`src/filters/`) that target stable
 hooks — URLs, element tags, visible label text — not class names, and
