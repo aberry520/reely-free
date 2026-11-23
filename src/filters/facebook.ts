@@ -580,6 +580,52 @@ export function buildFacebookScript(settings: FilterSettings): string {
             }
           }
         } catch (e) {}
+        // Back button, top-left, only while inside the video
+        // viewer (Austin's ask): this viewer's own chrome has no
+        // back control, and with swiping disabled the way out
+        // should be obvious. history.back() mirrors the hub's
+        // Back satellite — it closes the overlay viewer or
+        // leaves the single-video page, back to the feed.
+        try {
+          var viewerOpen2 = viewerRoute();
+          if (!viewerOpen2) {
+            var bv = document.querySelectorAll('video');
+            for (var bi = 0; bi < bv.length; bi++) {
+              if (videoInViewerLayer(bv[bi]) ||
+                  findViewerContext(bv[bi])) {
+                viewerOpen2 = true; break;
+              }
+            }
+          }
+          var backBtn = document.querySelector('[data-rf-back]');
+          if (viewerOpen2 && !backBtn) {
+            backBtn = document.createElement('div');
+            backBtn.setAttribute('data-rf-back', '1');
+            backBtn.setAttribute('role', 'button');
+            backBtn.setAttribute('aria-label', 'Back');
+            backBtn.style.cssText =
+              'position:fixed;left:12px;top:12px;z-index:100000;' +
+              'width:40px;height:40px;border-radius:50%;' +
+              'background:rgba(0,0,0,0.45);display:flex;' +
+              'align-items:center;justify-content:center;' +
+              'cursor:pointer;';
+            backBtn.innerHTML =
+              '<svg width="22" height="22" viewBox="0 0 24 24" fill="none">' +
+              '<path d="M15 5 L8 12 L15 19" stroke="#ffffff" ' +
+              'stroke-width="2.4" stroke-linecap="round" ' +
+              'stroke-linejoin="round"/></svg>';
+            backBtn.addEventListener('click', function (ev) {
+              try {
+                ev.preventDefault();
+                ev.stopPropagation();
+              } catch (e) {}
+              try { history.back(); } catch (e) {}
+            }, true);
+            document.body.appendChild(backBtn);
+          } else if (!viewerOpen2 && backBtn) {
+            backBtn.parentNode.removeChild(backBtn);
+          }
+        } catch (e) {}
         // Reels sections: find the "Reels" header and cover its
         // unit with the branded panel. The section itself is left
         // completely untouched underneath. Wrapped so a failure
