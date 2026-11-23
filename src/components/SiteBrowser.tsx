@@ -26,8 +26,10 @@ interface SiteBrowserProps {
   // Override the WebView user agent — the guest Marketplace door asks for
   // the desktop site, which treats logged-out visitors differently.
   userAgent?: string;
-  // Non-persistent WebView session: cookies/cache are not shared with the
-  // other doors, so the guest door never touches his Facebook login.
+  // Non-persistent WebView session, fully separate from the other doors:
+  // its own private data store AND no shared-cookie bridge (see the
+  // WebView props below), so the guest door can be logged out while the
+  // Facebook door stays logged in, and neither can leak into the other.
   incognito?: boolean;
   // Show a "Reset guest" pill that remounts the WebView fresh — the known
   // recovery when Facebook's login wall stops being dismissible.
@@ -248,8 +250,16 @@ export default function SiteBrowser({
         injectedJavaScriptBeforeContentLoaded={script}
         javaScriptEnabled
         domStorageEnabled
-        thirdPartyCookiesEnabled
-        sharedCookiesEnabled
+        thirdPartyCookiesEnabled={!incognito}
+        // Shared cookies are the bridge between doors: the Facebook door
+        // writes its login into the shared cookie storage and every
+        // shared-cookies WebView reads it back at startup — including an
+        // incognito one, whose private data store still gets the shared
+        // cookies copied in (that's how the guest Marketplace door first
+        // showed him logged in). An incognito door must never share, in
+        // either direction, or the two sessions are not separate at all.
+        sharedCookiesEnabled={!incognito}
+        cacheEnabled={!incognito}
         pullToRefreshEnabled={pullToRefresh}
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
