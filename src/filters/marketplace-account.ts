@@ -180,6 +180,32 @@ export function buildMarketplaceAccountScript(
     }
     return out;
   }
+  // Count the outermost tappable icon-sized controls inside a
+  // candidate strip (a control nested inside another control is
+  // the same button, counted once).
+  function isControl(n) {
+    return n.matches &&
+      n.matches('a, button, [role="button"], [role="link"]');
+  }
+  function iconControls(el) {
+    var nodes = el.querySelectorAll(
+      'a, button, [role="button"], [role="link"]');
+    var er = el.getBoundingClientRect();
+    var n = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var p = nodes[i].parentElement, nested = false;
+      while (p && p !== el) {
+        if (isControl(p)) { nested = true; break; }
+        p = p.parentElement;
+      }
+      if (nested) continue;
+      var r = nodes[i].getBoundingClientRect();
+      if (r.width >= 20 && r.width <= 72 &&
+          r.height >= 20 && r.height <= 72 &&
+          Math.abs(r.top - er.top) <= 10) n++;
+    }
+    return n;
+  }
   function findTabBar() {
     var sigs = topSigLinks();
     // Primary: climb from each signature link near the top to a
@@ -201,29 +227,33 @@ export function buildMarketplaceAccountScript(
         }
       }
     }
-    // Fallback: a structural scan — a full-width strip in the
-    // top 100px, bar-height, holding at least four tappable
-    // controls and at least one signature link.
+    // Fallback (round 3): identify the bar by SHAPE alone. Two
+    // rounds of link matching found nothing on Austin's phone —
+    // the mobile nav icons are evidently not plain anchors at
+    // all (script-driven buttons), so no signature link exists
+    // to require. The bar's shape is unmistakable though: the
+    // topmost full-width strip, bar-height, holding a row of at
+    // least four icon-sized tappable controls. The Marketplace
+    // title row below it holds only two controls (back, search)
+    // and the chips row sits lower and uses wide pills, so
+    // neither can qualify.
     var cands = document.querySelectorAll(
       'nav, header, [role="navigation"], [role="banner"], div');
-    var best = null, bestScore = -1;
+    var best = null, bestCount = 3, bestTop = 1e9;
     for (var i = 0; i < cands.length; i++) {
       var c = cands[i];
       if (c.closest && c.closest('#rf-mpa-cover')) continue;
       var cr = c.getBoundingClientRect();
-      if (cr.top < -20 || cr.top > 100) continue;
+      if (cr.top < -5 || cr.top > 80) continue;
       if (cr.width < window.innerWidth * 0.95) continue;
-      if (cr.height < 28 || cr.height > 95) continue;
-      var taps = c.querySelectorAll(
-        'a[href], button, [role="button"], [role="link"]').length;
-      if (taps < 4) continue;
-      var hasSig = false;
-      for (var m = 0; m < sigs.length; m++) {
-        if (c.contains(sigs[m])) { hasSig = true; break; }
+      if (cr.height < 36 || cr.height > 80) continue;
+      var n = iconControls(c);
+      if (n < 4) continue;
+      if (n > bestCount || (n === bestCount && cr.top < bestTop)) {
+        best = c;
+        bestCount = n;
+        bestTop = cr.top;
       }
-      if (!hasSig) continue;
-      var score = taps * 100 - cr.height;
-      if (score > bestScore) { bestScore = score; best = c; }
     }
     return best;
   }
