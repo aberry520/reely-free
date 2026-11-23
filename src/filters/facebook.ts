@@ -40,6 +40,34 @@ export function buildFacebookScript(settings: FilterSettings): string {
     try {
       if (!el || el.getAttribute('data-rf-branded')) return;
       var first = el.querySelector('svg, img, i');
+      if (!first) {
+        // No classic icon node (the top video tab survived the
+        // /watch branding in f3b7463 — his retest, 2026-11-23 —
+        // because this layout renders the tab icon as a plain
+        // styled box, not an svg/img/i). Fall back to a stand-in:
+        // a text-free, icon-sized descendant sitting near the
+        // entry's center (the notification badge is also small,
+        // but it carries text and sits in a corner, so both checks
+        // exclude it).
+        var er = el.getBoundingClientRect();
+        if (er.width > 0) {
+          var ecx = er.left + er.width / 2, ecy = er.top + er.height / 2;
+          var all = el.querySelectorAll('*');
+          for (var n = 0; n < all.length; n++) {
+            var cand = all[n];
+            if ((cand.textContent || '').trim() !== '') continue;
+            var cr = cand.getBoundingClientRect();
+            if (cr.width < 14 || cr.width > 52 ||
+                cr.height < 14 || cr.height > 52) continue;
+            var ccx = cr.left + cr.width / 2, ccy = cr.top + cr.height / 2;
+            if (Math.abs(ccx - ecx) <= er.width * 0.35 &&
+                Math.abs(ccy - ecy) <= er.height * 0.35) {
+              first = cand;
+              break;
+            }
+          }
+        }
+      }
       // Icon entries only: a plain text link (e.g. a /watch link
       // typed into a comment) has no icon to replace — leave it.
       if (!first) return;
@@ -67,6 +95,11 @@ export function buildFacebookScript(settings: FilterSettings): string {
       for (var q = 0; q < icons.length; q++) {
         if (icons[q] === img) continue;
         icons[q].style.setProperty('display', 'none', 'important');
+      }
+      // The stand-in box (when the icon wasn't an svg/img/i) goes too.
+      if (first && first.tagName !== 'svg' && first.tagName !== 'IMG' &&
+          first.tagName !== 'I' && first !== img) {
+        first.style.setProperty('display', 'none', 'important');
       }
       el.addEventListener('click', function (ev) {
         ev.preventDefault();
@@ -192,6 +225,38 @@ export function buildFacebookScript(settings: FilterSettings): string {
           var inArticle = navLinks[i].closest
             ? navLinks[i].closest('[role="article"]') : null;
           if (!inArticle) brandIcon(navLinks[i]);
+        }
+        // The same tab, found by label and position instead of
+        // link: if this layout's video tab isn't a /watch anchor
+        // at all (a role=tab / button the page navigates itself),
+        // the sweep above never sees it. Any tab-sized element in
+        // the top tab-bar region whose accessible label says
+        // Reels / Watch / Video gets branded the same way.
+        var labelled = document.querySelectorAll(
+          '[aria-label], [role="tab"], [role="button"]');
+        for (var b = 0; b < labelled.length; b++) {
+          var cand2 = labelled[b];
+          if (cand2.getAttribute('data-rf-branded')) continue;
+          var label = (cand2.getAttribute('aria-label') || '') + ' ' +
+                      (cand2.getAttribute('title') || '');
+          if (!/reel|watch|video/i.test(label)) continue;
+          if (/marketplace|notification|messenger|friend|home|group/i.test(label)) continue;
+          if (cand2.closest && cand2.closest('[role="article"]')) continue;
+          var br = cand2.getBoundingClientRect();
+          var docTop = br.top + (window.scrollY || 0);
+          if (docTop > 280 || br.width < 28 || br.width > 120 ||
+              br.height < 24 || br.height > 90) continue;
+          // Brand the clickable entry, not an inner wrapper: climb
+          // to the anchor/tab/button that owns this label.
+          var entry = cand2;
+          var up = 0;
+          while (entry && up < 4) {
+            if (entry.tagName === 'A' ||
+                entry.getAttribute('role') === 'tab' ||
+                entry.getAttribute('role') === 'button') break;
+            entry = entry.parentElement; up++;
+          }
+          brandIcon(entry || cand2);
         }
       }
       var posts = document.querySelectorAll('[role="article"]');
