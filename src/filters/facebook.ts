@@ -125,44 +125,65 @@ export function buildFacebookScript(settings: FilterSettings): string {
   } catch (e) {}
   setInterval(apply, 3000);
   // Header that comes back on scroll up, like the app. Facebook serves
-  // different markup to different clients, so the header is found at
-  // runtime rather than by a hard-coded selector: the first element that
-  // starts at the very top of the document, is bar-shaped (full width,
-  // 36-96px tall), and holds several controls including a home link or a
-  // search box. If the site's own styling already keeps it fixed or
-  // sticky, this leaves it completely alone. While pinned, the parent
-  // gets matching top padding so the feed doesn't jump.
+  // different markup to different clients and nests it deeply, so the
+  // header is found at runtime by scanning the page: an element that
+  // starts at the very top of the document (offsetTop, so scroll position
+  // doesn't matter), is bar-shaped (full width, 36-96px tall), contains
+  // no posts, and holds several controls including a home link or a
+  // search box. Two cases are handled: a header that scrolls away with
+  // the page (we pin it ourselves, with padding on the parent so the
+  // feed doesn't jump), and a header Facebook already keeps fixed but
+  // hides on scroll down (we force it back into view on scroll up and
+  // hand it back on scroll down).
   if (S.stickyHeader) {
-    var hdr = null, hdrParent = null, hdrHeight = 0, hdrPinned = false, lastY = 0;
+    var hdr = null, hdrParent = null, hdrHeight = 0, hdrMode = '', hdrShown = false;
+    var lastY = 0, lastSearch = 0;
     function findHeader() {
       if (hdr && document.contains(hdr)) return hdr;
       try {
-        var cands = document.querySelectorAll('body > *, body > * > *, body > * > * > *');
-        for (var i = 0; i < cands.length; i++) {
-          var el = cands[i];
+        var all = document.querySelectorAll('div, header, nav, section');
+        for (var i = 0; i < all.length; i++) {
+          var el = all[i];
           var r = el.getBoundingClientRect();
-          if (r.top + (window.scrollY || 0) > 4) continue;
           if (r.height < 36 || r.height > 96) continue;
           if (r.width < window.innerWidth * 0.95) continue;
-          var pos = '';
-          try { pos = window.getComputedStyle(el).position; } catch (e) {}
-          if (pos === 'fixed' || pos === 'sticky') return null;
+          var offTop = 0, n = el;
+          while (n) { offTop += n.offsetTop || 0; n = n.offsetParent; }
+          if (offTop > 8) continue;
+          if (el.querySelector && el.querySelector('[role="article"]')) continue;
           var controls = el.querySelectorAll('a, button, [role="button"], input');
           if (controls.length < 3) continue;
-          var hasHome = !!el.querySelector('a[href="/"], a[href^="/?"], a[href*="facebook.com/?"]');
+          var hasHome = !!el.querySelector('a[href="/"], a[href^="/?"], a[href*="facebook.com"]');
           var hasSearch = !!el.querySelector('input, [aria-label*="Search"]');
           if (!hasHome && !hasSearch) continue;
-          hdr = el; hdrParent = el.parentElement; hdrHeight = r.height;
+          var pos = '';
+          try { pos = window.getComputedStyle(el).position; } catch (e) {}
+          hdr = el;
+          hdrParent = el.parentElement;
+          hdrHeight = r.height;
+          hdrMode = (pos === 'fixed' || pos === 'sticky') ? 'site' : 'flow';
           return hdr;
         }
       } catch (e) {}
       return null;
     }
-    function setPinned(on) {
-      if (!hdr || hdrPinned === on) return;
-      hdrPinned = on;
+    function setShown(on) {
+      if (!hdr || hdrShown === on) return;
+      hdrShown = on;
       try {
-        if (on) {
+        if (hdrMode === 'site') {
+          if (on) {
+            hdr.style.setProperty('transform', 'none', 'important');
+            hdr.style.setProperty('top', '0', 'important');
+            hdr.style.setProperty('opacity', '1', 'important');
+            hdr.style.setProperty('visibility', 'visible', 'important');
+          } else {
+            hdr.style.removeProperty('transform');
+            hdr.style.removeProperty('top');
+            hdr.style.removeProperty('opacity');
+            hdr.style.removeProperty('visibility');
+          }
+        } else if (on) {
           hdr.style.setProperty('position', 'fixed', 'important');
           hdr.style.setProperty('top', '0', 'important');
           hdr.style.setProperty('left', '0', 'important');
@@ -184,10 +205,15 @@ export function buildFacebookScript(settings: FilterSettings): string {
         var target = e.target;
         var y = (target && target !== document && typeof target.scrollTop === 'number')
           ? target.scrollTop : (window.scrollY || 0);
-        if (!findHeader()) { lastY = y; return; }
-        if (y <= hdrHeight) setPinned(false);
-        else if (y < lastY - 4) setPinned(true);
-        else if (y > lastY + 4) setPinned(false);
+        if (!hdr) {
+          var now = Date.now();
+          if (now - lastSearch < 800) { lastY = y; return; }
+          lastSearch = now;
+          if (!findHeader()) { lastY = y; return; }
+        }
+        if (y <= hdrHeight) setShown(true);
+        else if (y < lastY - 4) setShown(true);
+        else if (y > lastY + 4) setShown(false);
         lastY = y;
       } catch (err) {}
     }, { passive: true, capture: true });
