@@ -94,10 +94,10 @@ const BTN_POS_KEY = 'reelyfree-homebtn-v1';
 //   nearest side, remembers its spot across all doors. A tap goes home.
 //   A long-press fans out the combined control (modeled on the Windows
 //   floating hub in Austin's reference video, 2026-11-23): satellite
-//   buttons appear beside it — Back (when there's somewhere to go back
-//   to) and one per other enabled door — so home, back and hot-swap
-//   all live in this one control; the old separate back button and
-//   switcher panel are gone.
+//   buttons appear beside it — Back (always there, greyed out when
+//   there's nowhere to go back to), one per other enabled door, and
+//   Settings — so home, back and hot-swap all live in this one
+//   control; the old separate back button and switcher panel are gone.
 // If he turns all four off, the button stays anyway as a fallback so a site
 // screen can never become a dead end.
 export default function SiteBrowser({
@@ -344,13 +344,18 @@ export default function SiteBrowser({
     label: string;
     bg: string;
     icon: React.ReactNode;
+    dimmed?: boolean;
     action: () => void;
   }[] = [];
-  if (navCfg.backButton && canGoBack) {
+  if (navCfg.backButton) {
+    // Back is ALWAYS in the fan when its toggle is on (Austin's ask,
+    // 2026-11-23) — greyed out and inert when there's nowhere to go
+    // back to right now, so the fan's layout never changes under him.
     satellites.push({
       key: 'back',
-      label: 'Go back',
+      label: canGoBack ? 'Go back' : 'Go back (nothing to go back to)',
       bg: theme.homeBtnBg,
+      dimmed: !canGoBack,
       icon: (
         <MaterialIcons
           name="arrow-back"
@@ -358,7 +363,9 @@ export default function SiteBrowser({
           color={theme.homeBtnGlyph}
         />
       ),
-      action: () => webRef.current?.goBack(),
+      action: () => {
+        if (canGoBack) webRef.current?.goBack();
+      },
     });
   }
   for (const a of APPS) {
@@ -381,6 +388,15 @@ export default function SiteBrowser({
       action: () => router.replace(a.route),
     });
   }
+  satellites.push({
+    key: 'settings',
+    label: 'Settings',
+    bg: theme.homeBtnBg,
+    icon: (
+      <MaterialIcons name="settings" size={24} color={theme.homeBtnGlyph} />
+    ),
+    action: () => router.navigate('/settings'),
+  });
   const fanTowardCenter = hubPos.x + BTN / 2 < win.width / 2;
   const satX = fanTowardCenter ? hubPos.x + BTN + 12 : hubPos.x - SAT - 12;
   const satTotal =
@@ -526,6 +542,7 @@ export default function SiteBrowser({
                   backgroundColor: s.bg,
                   left: satX,
                   top: satStartY + i * (SAT + SAT_GAP),
+                  opacity: s.dimmed ? 0.35 : 1,
                 },
               ]}
             >

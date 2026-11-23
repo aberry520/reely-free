@@ -292,7 +292,7 @@ export default function SettingsScreen() {
           />
           <ToggleRow
             label="Back button"
-            detail="Adds a back arrow to the floating control's fan (long-press the home button) whenever there's a page to go back to — like from a video back to the feed. It's not in the fan when there's nowhere to go back to."
+            detail="The back arrow is always in the floating control's fan (long-press the home button). It works when there's a page to go back to — like from a video back to the feed — and sits greyed out when there isn't."
             value={settings.navBackButton}
             onChange={set('navBackButton')}
           />
