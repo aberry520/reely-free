@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import SiteBrowser from '../src/components/SiteBrowser';
 import { buildMarketplaceGuestScript } from '../src/filters/marketplace-guest';
@@ -30,9 +31,45 @@ const DESKTOP_UA =
   'Chrome/126.0.0.0 Safari/537.36';
 
 export default function MarketplaceGuestScreen() {
+  // The home screen's guest search launcher passes a slice (query +
+  // price band + sort) as route params. Each slice is a separate
+  // result pool in Facebook's guest cap, so the door opens directly on
+  // the search URL when a query is present, and on the plain feed
+  // otherwise. Only positive whole numbers pass as prices, and the
+  // sort is restricted to the three values the launcher can send.
+  const params = useLocalSearchParams<{
+    q?: string;
+    min?: string;
+    max?: string;
+    sort?: string;
+  }>();
+  const q = (params.q ?? '').trim();
+  const price = (v?: string) => {
+    const n = Number.parseInt(v ?? '', 10);
+    return Number.isFinite(n) && n > 0 ? String(n) : null;
+  };
+  const sort = [
+    'creation_time_descend',
+    'price_ascend',
+    'price_descend',
+  ].includes(params.sort ?? '')
+    ? params.sort
+    : null;
+  let homeUrl = 'https://www.facebook.com/marketplace/';
+  if (q) {
+    const parts = [`query=${encodeURIComponent(q)}`];
+    const min = price(params.min);
+    const max = price(params.max);
+    if (min) parts.push(`minPrice=${min}`);
+    if (max) parts.push(`maxPrice=${max}`);
+    if (sort) parts.push(`sortBy=${sort}`);
+    parts.push('exact=false');
+    homeUrl = `https://www.facebook.com/marketplace/category/search/?${parts.join('&')}`;
+  }
+
   return (
     <SiteBrowser
-      homeUrl="https://www.facebook.com/marketplace/"
+      homeUrl={homeUrl}
       buildScript={buildMarketplaceGuestScript}
       userAgent={DESKTOP_UA}
       incognito
