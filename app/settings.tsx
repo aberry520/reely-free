@@ -313,7 +313,7 @@ export default function SettingsScreen() {
         <>
           <ToggleRow
             label="Floating home button"
-            detail="A movable button that's always on screen. Drag it anywhere; tap it to go home; long-press it and it fans out into the combined control — back (when there's somewhere to go back to) and a jump button for each other app that's turned on."
+            detail="The Reely Free icon, always on screen. Drag it anywhere; tap it and it fans out into the combined control — Home, Back (greyed out when there's nowhere to go back to), a jump button for each other app that's turned on, and Settings."
             value={settings.navButton}
             onChange={set('navButton')}
           />
@@ -337,7 +337,7 @@ export default function SettingsScreen() {
           />
           <ToggleRow
             label="Back button"
-            detail="The back arrow is always in the floating control's fan (long-press the home button). It works when there's a page to go back to — like from a video back to the feed — and sits greyed out when there isn't."
+            detail="The back arrow is always in the floating control's fan (tap the Reely Free button). It works when there's a page to go back to — like from a video back to the feed — and sits greyed out when there isn't."
             value={settings.navBackButton}
             onChange={set('navBackButton')}
           />

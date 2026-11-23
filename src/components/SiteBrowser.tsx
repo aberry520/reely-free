@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Image,
   PanResponder,
   Pressable,
   Share,
@@ -39,8 +40,8 @@ interface SiteBrowserProps {
   // URL fragments that must never load (e.g. Facebook's login/signup
   // pages on the guest door, where signing in is not the point).
   blockUrlFragments?: string[];
-  // Which door this is — the home button's long-press switcher lists
-  // the OTHER enabled doors, so it needs to know the current one.
+  // Which door this is — the floating control's fan lists the OTHER
+  // enabled doors, so it needs to know the current one.
   appId?: AppId;
   // The page's filter script can post {type:'rf-share', url} when the
   // user taps a Share control whose own flow won't work (the guest
@@ -51,10 +52,10 @@ interface SiteBrowserProps {
 
 export type AppId = 'facebook' | 'instagram' | 'youtube' | 'marketplace';
 
-// The doors the home button can hot-swap between (Austin's ask,
-// 2026-11-23): long-pressing the floating button lists the enabled
-// ones besides the door you're in, and tapping one jumps straight
-// there — no trip home first.
+// The doors the floating control can hot-swap between (Austin's
+// ask, 2026-11-23): the fan lists the enabled ones besides the
+// door you're in, and tapping one jumps straight there — no trip
+// home first.
 const APPS: {
   id: AppId;
   label: string;
@@ -104,13 +105,15 @@ const BTN_POS_KEY = 'reelyfree-homebtn-v1';
 // - right-edge swipe: a thin zone on the right edge, swipe left to go home
 // - bottom swipe: a bar at the bottom center (iOS often steals this one)
 // - the translucent floating control: draggable anywhere, snaps to the
-//   nearest side, remembers its spot across all doors. A tap goes home.
-//   A long-press fans out the combined control (modeled on the Windows
-//   floating hub in Austin's reference video, 2026-11-23): satellite
-//   buttons appear beside it — Back (always there, greyed out when
-//   there's nowhere to go back to), one per other enabled door, and
-//   Settings — so home, back and hot-swap all live in this one
-//   control; the old separate back button and switcher panel are gone.
+//   nearest side, remembers its spot across all doors. The button is
+//   the Reely Free icon itself; a tap fans out the combined control
+//   (modeled on the Windows floating hub in Austin's reference video,
+//   2026-11-23): satellite buttons appear beside it — Home, Back
+//   (always there, greyed out when there's nowhere to go back to),
+//   one per other enabled door, and Settings — so home, back and
+//   hot-swap all live in this one control. (A tap replaced the
+//   original long-press, and Home moved into the fan, at Austin's
+//   ask, 2026-11-23.)
 // If he turns all four off, the button stays anyway as a fallback so a site
 // screen can never become a dead end.
 export default function SiteBrowser({
@@ -250,11 +253,10 @@ export default function SiteBrowser({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Long-press on the floating control fans out its satellites. The
-  // press timer only survives a still finger: any real drag cancels
-  // it, and a fired long-press suppresses the tap-to-go-home on
-  // release. hubPos snapshots the button's spot when the fan opens,
-  // so the satellites anchor to where the button actually is.
+  // A tap on the floating control fans out its satellites (it used
+  // to take a long-press; Austin asked for tap, 2026-11-23).
+  // hubPos snapshots the button's spot when the fan opens, so the
+  // satellites anchor to where the button actually is.
   const [expanded, setExpanded] = useState(false);
   const [hubPos, setHubPos] = useState({ x: 0, y: 0 });
   // Mirror of `expanded` for the (memoized) pan handlers, plus a flag
@@ -270,50 +272,32 @@ export default function SiteBrowser({
     expandedRef.current = false;
     setExpanded(false);
   };
-  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressedRef = useRef(false);
-  const clearPressTimer = () => {
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
-  };
-
   const btnPan = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           dragStartRef.current = { ...posRef.current };
-          longPressedRef.current = false;
           collapseOnlyRef.current = expandedRef.current;
           if (expandedRef.current) closeFan();
-          clearPressTimer();
-          pressTimerRef.current = setTimeout(() => {
-            longPressedRef.current = true;
-            setHubPos({ ...posRef.current });
-            openFan();
-          }, 450);
         },
         onPanResponderMove: (_, g) => {
-          if (Math.hypot(g.dx, g.dy) >= 8) clearPressTimer();
           pan.setValue({
             x: dragStartRef.current.x + g.dx,
             y: dragStartRef.current.y + g.dy,
           });
         },
         onPanResponderRelease: (_, g) => {
-          clearPressTimer();
-          if (longPressedRef.current) {
-            longPressedRef.current = false;
-            return;
-          }
           if (collapseOnlyRef.current) {
             collapseOnlyRef.current = false;
             return;
           }
           if (Math.hypot(g.dx, g.dy) < 8) {
-            goHome();
+            // A tap opens the fan. (A tap that started on an open
+            // fan was already handled at grant time — it only
+            // collapses, via collapseOnlyRef above.)
+            setHubPos({ ...posRef.current });
+            openFan();
             return;
           }
           const movedX = dragStartRef.current.x + g.dx;
@@ -337,8 +321,6 @@ export default function SiteBrowser({
           );
         },
         onPanResponderTerminate: () => {
-          clearPressTimer();
-          longPressedRef.current = false;
           collapseOnlyRef.current = false;
         },
       }),
@@ -347,10 +329,11 @@ export default function SiteBrowser({
   );
 
   // --- Combined floating control: the satellite fan ---------------------
-  // Back (only when there's somewhere to go back to and its toggle is
-  // on), then one satellite per other enabled door. The fan opens
-  // toward the middle of the screen from wherever the hub sits, as a
-  // vertical stack centered on the hub, clamped to the screen.
+  // Home first (it used to be the hub's own tap action; Austin moved
+  // it into the fan, 2026-11-23), then Back, then one satellite per
+  // other enabled door, then Settings. The fan opens toward the
+  // middle of the screen from wherever the hub sits, as a vertical
+  // stack centered on the hub, clamped to the screen.
   const SAT = 46;
   const SAT_GAP = 10;
   const satellites: {
@@ -361,6 +344,15 @@ export default function SiteBrowser({
     dimmed?: boolean;
     action: () => void;
   }[] = [];
+  satellites.push({
+    key: 'home',
+    label: 'Home',
+    bg: theme.homeBtnBg,
+    icon: (
+      <MaterialIcons name="home" size={24} color={theme.homeBtnGlyph} />
+    ),
+    action: goHome,
+  });
   if (navCfg.backButton) {
     // Back is ALWAYS in the fan when its toggle is on (Austin's ask,
     // 2026-11-23) — greyed out and inert when there's nowhere to go
@@ -546,19 +538,17 @@ export default function SiteBrowser({
       {showButton && btnReady && (
         <Animated.View
           {...btnPan.panHandlers}
-          accessibilityLabel="Go home — long-press to switch apps"
+          accessibilityLabel="Reely Free menu — tap to open, drag to move"
           style={[
             styles.homeBtn,
             {
-              backgroundColor: theme.homeBtnBg,
               transform: pan.getTranslateTransform(),
             },
           ]}
         >
-          <MaterialIcons
-            name="home"
-            size={28}
-            color={theme.homeBtnGlyph}
+          <Image
+            source={require('../../assets/logo-mark.png')}
+            style={styles.homeBtnIcon}
           />
         </Animated.View>
       )}
@@ -660,6 +650,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
     zIndex: 10,
+  },
+  homeBtnIcon: {
+    width: BTN,
+    height: BTN,
+    borderRadius: BTN / 2,
   },
   fanOverlay: {
     position: 'absolute',
