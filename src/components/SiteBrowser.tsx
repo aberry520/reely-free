@@ -6,6 +6,7 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -48,6 +49,10 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
   const script = useMemo(() => buildScript(settings), [buildScript, settings]);
 
   const goHome = () => router.navigate('/');
+
+  // In-page back (e.g. from a video back to the feed): the button only
+  // appears when the WebView actually has somewhere to go back to.
+  const [canGoBack, setCanGoBack] = useState(false);
 
   // --- Bottom swipe bar (optional; iOS often steals this gesture) ---------
   const bottomFiredRef = useRef(false);
@@ -217,6 +222,7 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         setSupportMultipleWindows={false}
+        onNavigationStateChange={(nav) => setCanGoBack(nav.canGoBack)}
         onShouldStartLoadWithRequest={(req) => {
           // Nothing leaves the app: app schemes (fb://, youtube://,
           // intent:, …) and app-store links are refused outright, so even
@@ -241,6 +247,23 @@ export default function SiteBrowser({ homeUrl, buildScript }: SiteBrowserProps) 
           </View>
         )}
       />
+      {settings.navBackButton && canGoBack && (
+        <Pressable
+          accessibilityLabel="Go back"
+          onPress={() => webRef.current?.goBack()}
+          style={[
+            styles.backBtn,
+            {
+              backgroundColor: theme.homeBtnBg,
+              bottom: insets.bottom + 64,
+            },
+          ]}
+        >
+          <Text style={[styles.backBtnGlyph, { color: theme.homeBtnGlyph }]}>
+            ‹
+          </Text>
+        </Pressable>
+      )}
       {settings.navBottomSwipe && (
         <View style={styles.grabberZone} {...bottomBar.panHandlers}>
           <View
@@ -282,6 +305,29 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
+  backBtnGlyph: {
+    fontSize: 30,
+    lineHeight: 32,
+    marginTop: -4,
+    marginRight: 2,
   },
   grabberZone: {
     position: 'absolute',

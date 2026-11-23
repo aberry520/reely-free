@@ -22,7 +22,9 @@ stack as Reseller HQ.
   from the bottom, swipe in from the left edge, swipe in from the right
   edge. Bottom swipe defaults off because iOS reserves the whole bottom
   edge for itself and kept stealing it; if all four are off, the button
-  stays anyway so a site screen is never a dead end.
+  stays anyway so a site screen is never a dead end. A smaller floating
+  back button appears only when the page has somewhere to go back to
+  (video → feed), and it has its own switch too.
 
 The filters are injected JavaScript (`src/filters/`) that target stable
 hooks — URLs, element tags, visible label text — not class names, and

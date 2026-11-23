@@ -27,6 +27,7 @@ export interface FilterSettings {
   navBottomSwipe: boolean;
   navLeftEdge: boolean;
   navRightEdge: boolean;
+  navBackButton: boolean;
 }
 
 export const DEFAULT_SETTINGS: FilterSettings = {
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   navBottomSwipe: false,
   navLeftEdge: true,
   navRightEdge: true,
+  navBackButton: true,
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';

@@ -124,6 +124,12 @@ export default function SettingsScreen() {
         value={settings.navRightEdge}
         onChange={set('navRightEdge')}
       />
+      <ToggleRow
+        label="Back button"
+        detail="A small floating button appears whenever there's a page to go back to — like from a video back to the feed. It hides itself when there's nowhere to go back to."
+        value={settings.navBackButton}
+        onChange={set('navBackButton')}
+      />
 
       <Text style={[styles.note, { color: theme.muted }]}>
         Changes apply the next time you open Facebook or YouTube. Marketplace
