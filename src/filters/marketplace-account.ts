@@ -354,6 +354,80 @@ export function buildMarketplaceAccountScript(
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
   }
+  // TEMPORARY diagnostic (2026-11-23): three rounds of tab-bar
+  // detection missed on Austin's phone, so instead of guessing a
+  // fourth, the page reports its actual top-region structure to
+  // the app, which displays it for a screenshot. What element
+  // sits under the icons (elementFromPoint chains), what the
+  // signature scan sees, what the finder picked, and where the
+  // cover ended up. Remove once the finder is proven.
+  function desc(el) {
+    if (!el || !el.tagName) return 'null';
+    var r = el.getBoundingClientRect();
+    var s = el.tagName.toLowerCase();
+    if (el.id) s += '#' + el.id.slice(0, 24);
+    var role = el.getAttribute && el.getAttribute('role');
+    if (role) s += '[' + role + ']';
+    var al = el.getAttribute && el.getAttribute('aria-label');
+    if (al) s += '("' + al.slice(0, 20) + '")';
+    var tid = el.getAttribute &&
+      (el.getAttribute('data-testid') || el.getAttribute('data-test-id'));
+    if (tid) s += ' testid=' + tid.slice(0, 24);
+    s += ' @' + Math.round(r.left) + ',' + Math.round(r.top) +
+      ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
+    return s;
+  }
+  function chain(el, n) {
+    var out = [];
+    var e = el;
+    for (var i = 0; i < n && e; i++) {
+      out.push(desc(e));
+      e = e.parentElement;
+    }
+    return out;
+  }
+  function sendDiag() {
+    try {
+      if (!window.ReactNativeWebView ||
+          !window.ReactNativeWebView.postMessage) return;
+      var bar = null;
+      try { bar = findTabBar(); } catch (e) {}
+      var sigs = [];
+      try { sigs = topSigLinks(); } catch (e) {}
+      var hdrs = [];
+      var hEls = document.querySelectorAll(
+        'header, nav, [role="banner"], [role="navigation"]');
+      for (var h = 0; h < hEls.length && h < 4; h++) {
+        hdrs.push(desc(hEls[h]));
+      }
+      var report = {
+        type: 'rf-diag',
+        path: location.pathname,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+        sigCount: sigs.length,
+        sigPaths: sigs.map(function (a) { return pathOf(a); }).slice(0, 8),
+        bar: bar ? desc(bar) : 'NONE',
+        barIcons: bar ? iconControls(bar) : 0,
+        cover: cover
+          ? desc(cover) + ' display=' + cover.style.display
+          : 'not-created',
+        hdrs: hdrs,
+        atHome: chain(document.elementFromPoint(55, 28), 5),
+        atMid: chain(document.elementFromPoint(200, 28), 5),
+        atBell: chain(document.elementFromPoint(290, 28), 5)
+      };
+      window.ReactNativeWebView.postMessage(JSON.stringify(report));
+    } catch (e) {}
+  }
+  if (S.brandHeader) {
+    var diagSent = 0;
+    var diagTimer = setInterval(function () {
+      diagSent++;
+      sendDiag();
+      if (diagSent >= 3) clearInterval(diagTimer);
+    }, 2500);
+  }
   true;
 })();
 `;

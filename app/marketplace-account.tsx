@@ -17,6 +17,9 @@ export default function MarketplaceAccountScreen() {
       appId="marketplaceAccount"
       homeUrl="https://www.facebook.com/marketplace"
       buildScript={buildMarketplaceAccountScript}
+      // Temporary: show the filter's structural self-report on
+      // screen while the branded header cover is being debugged.
+      diagnostics
     />
   );
 }

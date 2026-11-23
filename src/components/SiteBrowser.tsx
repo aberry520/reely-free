@@ -16,6 +16,7 @@ import {
   Image,
   PanResponder,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -61,6 +62,10 @@ interface SiteBrowserProps {
   // Marketplace door: Facebook's share dialog wants a login). The app
   // answers with the phone's own share sheet carrying that link.
   nativeShare?: boolean;
+  // Temporary: the page may post {type:'rf-diag', ...} reports about
+  // its own structure, shown in an on-screen box for screenshotting
+  // (used to debug the Marketplace-account header cover).
+  diagnostics?: boolean;
 }
 
 export type AppId =
@@ -186,6 +191,7 @@ export default function SiteBrowser({
   blockUrlFragments,
   appId,
   nativeShare,
+  diagnostics,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   // Getting Home has no feature master (Austin's hierarchy,
@@ -222,6 +228,8 @@ export default function SiteBrowser({
     : true;
   const [usedSec, setUsedSec] = useState(0);
   const [warnDismissed, setWarnDismissed] = useState(false);
+  // Latest in-page diagnostic report (temporary debugging aid).
+  const [diag, setDiag] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -576,27 +584,26 @@ export default function SiteBrowser({
           setCanGoBack(nav.canGoBack);
           setCurrentUrl(nav.url);
         }}
-        onMessage={
-          nativeShare
-            ? (event) => {
-                try {
-                  const data = JSON.parse(event.nativeEvent.data) as {
-                    type?: string;
-                    url?: string;
-                  };
-                  if (
-                    data.type === 'rf-share' &&
-                    typeof data.url === 'string' &&
-                    data.url.startsWith('https://')
-                  ) {
-                    Share.share({ url: data.url }).catch(() => {});
-                  }
-                } catch {
-                  // Not one of ours — ignore.
-                }
-              }
-            : undefined
-        }
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data) as {
+              type?: string;
+              url?: string;
+            };
+            if (
+              nativeShare &&
+              data.type === 'rf-share' &&
+              typeof data.url === 'string' &&
+              data.url.startsWith('https://')
+            ) {
+              Share.share({ url: data.url }).catch(() => {});
+            } else if (diagnostics && data.type === 'rf-diag') {
+              setDiag(JSON.stringify(data, null, 1));
+            }
+          } catch {
+            // Not one of ours — ignore.
+          }
+        }}
         onShouldStartLoadWithRequest={(req) => {
           // Nothing leaves the app: app schemes (fb://, youtube://,
           // intent:, …) and app-store links are refused outright, so even
@@ -716,6 +723,32 @@ export default function SiteBrowser({
             style={styles.homeBtnIcon}
           />
         </Animated.View>
+      )}
+      {diag && (
+        <View
+          style={[
+            styles.diagBox,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <View style={styles.diagHead}>
+            <Text style={[styles.diagTitle, { color: theme.text }]}>
+              Header diagnostic — screenshot this
+            </Text>
+            <Pressable
+              accessibilityLabel="Dismiss diagnostic"
+              onPress={() => setDiag(null)}
+              hitSlop={8}
+            >
+              <MaterialIcons name="close" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.diagScroll}>
+            <Text style={[styles.diagText, { color: theme.text }]}>
+              {diag}
+            </Text>
+          </ScrollView>
+        </View>
       )}
       {expanded && showButton && satellites.length > 0 && (
         <View style={styles.fanOverlay}>
@@ -856,6 +889,26 @@ const styles = StyleSheet.create({
     zIndex: 12,
   },
   warnText: { fontSize: 13, fontWeight: '600' },
+  diagBox: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 8,
+    maxHeight: '55%',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    zIndex: 30,
+  },
+  diagHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  diagTitle: { fontSize: 13, fontWeight: '700' },
+  diagScroll: { flexShrink: 1 },
+  diagText: { fontSize: 10, lineHeight: 14 },
   lockOverlay: {
     position: 'absolute',
     top: 0,
