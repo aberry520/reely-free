@@ -23,6 +23,7 @@ export interface FilterSettings {
   fbHideSuggested: boolean;
   fbHideSponsored: boolean;
   fbBlockAppPromo: boolean;
+  fbStickyHeader: boolean;
   // Ways to get back home from a site screen (Austin's picks, 2026-11-22)
   navButton: boolean;
   navBottomSwipe: boolean;
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   fbHideSuggested: true,
   fbHideSponsored: true,
   fbBlockAppPromo: true,
+  fbStickyHeader: true,
   // Bottom swipe defaults OFF: iOS grabs the whole bottom edge for its own
   // home gesture, so it was inconsistent in his on-device test. The other
   // three default on.

@@ -104,6 +104,12 @@ export default function SettingsScreen() {
         value={settings.fbBlockAppPromo}
         onChange={set('fbBlockAppPromo')}
       />
+      <ToggleRow
+        label="Header returns on scroll up"
+        detail="Like the app: the top bar scrolls away going down and comes back as soon as you scroll up, instead of only at the very top."
+        value={settings.fbStickyHeader}
+        onChange={set('fbStickyHeader')}
+      />
 
       <Text style={[styles.section, { color: theme.text }]}>Getting home</Text>
       <ToggleRow

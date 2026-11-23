@@ -12,6 +12,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
     hideSuggested: settings.fbHideSuggested,
     hideSponsored: settings.fbHideSponsored,
     blockAppPromo: settings.fbBlockAppPromo,
+    stickyHeader: settings.fbStickyHeader,
   });
 
   return `
@@ -123,6 +124,74 @@ export function buildFacebookScript(settings: FilterSettings): string {
     obs.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
   setInterval(apply, 3000);
+  // Header that comes back on scroll up, like the app. Facebook serves
+  // different markup to different clients, so the header is found at
+  // runtime rather than by a hard-coded selector: the first element that
+  // starts at the very top of the document, is bar-shaped (full width,
+  // 36-96px tall), and holds several controls including a home link or a
+  // search box. If the site's own styling already keeps it fixed or
+  // sticky, this leaves it completely alone. While pinned, the parent
+  // gets matching top padding so the feed doesn't jump.
+  if (S.stickyHeader) {
+    var hdr = null, hdrParent = null, hdrHeight = 0, hdrPinned = false, lastY = 0;
+    function findHeader() {
+      if (hdr && document.contains(hdr)) return hdr;
+      try {
+        var cands = document.querySelectorAll('body > *, body > * > *, body > * > * > *');
+        for (var i = 0; i < cands.length; i++) {
+          var el = cands[i];
+          var r = el.getBoundingClientRect();
+          if (r.top + (window.scrollY || 0) > 4) continue;
+          if (r.height < 36 || r.height > 96) continue;
+          if (r.width < window.innerWidth * 0.95) continue;
+          var pos = '';
+          try { pos = window.getComputedStyle(el).position; } catch (e) {}
+          if (pos === 'fixed' || pos === 'sticky') return null;
+          var controls = el.querySelectorAll('a, button, [role="button"], input');
+          if (controls.length < 3) continue;
+          var hasHome = !!el.querySelector('a[href="/"], a[href^="/?"], a[href*="facebook.com/?"]');
+          var hasSearch = !!el.querySelector('input, [aria-label*="Search"]');
+          if (!hasHome && !hasSearch) continue;
+          hdr = el; hdrParent = el.parentElement; hdrHeight = r.height;
+          return hdr;
+        }
+      } catch (e) {}
+      return null;
+    }
+    function setPinned(on) {
+      if (!hdr || hdrPinned === on) return;
+      hdrPinned = on;
+      try {
+        if (on) {
+          hdr.style.setProperty('position', 'fixed', 'important');
+          hdr.style.setProperty('top', '0', 'important');
+          hdr.style.setProperty('left', '0', 'important');
+          hdr.style.setProperty('right', '0', 'important');
+          hdr.style.setProperty('z-index', '999', 'important');
+          if (hdrParent) hdrParent.style.setProperty('padding-top', hdrHeight + 'px', 'important');
+        } else {
+          hdr.style.removeProperty('position');
+          hdr.style.removeProperty('top');
+          hdr.style.removeProperty('left');
+          hdr.style.removeProperty('right');
+          hdr.style.removeProperty('z-index');
+          if (hdrParent) hdrParent.style.removeProperty('padding-top');
+        }
+      } catch (e) {}
+    }
+    document.addEventListener('scroll', function (e) {
+      try {
+        var target = e.target;
+        var y = (target && target !== document && typeof target.scrollTop === 'number')
+          ? target.scrollTop : (window.scrollY || 0);
+        if (!findHeader()) { lastY = y; return; }
+        if (y <= hdrHeight) setPinned(false);
+        else if (y < lastY - 4) setPinned(true);
+        else if (y > lastY + 4) setPinned(false);
+        lastY = y;
+      } catch (err) {}
+    }, { passive: true, capture: true });
+  }
   true;
 })();
 `;

@@ -13,8 +13,12 @@ stack as Reseller HQ.
   can't float over the page (the one thing the real app does that a
   WebView can't).
 - **Facebook**: no Reels, no "Suggested for you" posts, no sponsored posts,
-  and the "Open app" bar at the bottom of the feed is hidden. Feed, groups
-  and **Marketplace** stay. Messenger stays in its own app.
+  and the "Open app" bar at the bottom of the feed is hidden. The top
+  header bar behaves like the app's: it scrolls away going down and pins
+  itself back to the top as soon as you scroll up (the filter finds the
+  header at runtime, since Facebook serves different markup to different
+  clients, and leaves it alone if the site already keeps it fixed). Feed,
+  groups and **Marketplace** stay. Messenger stays in its own app.
 - Links that try to open the real apps (fb://, youtube://, App Store) are
   refused by the WebView itself, so a banner that slips past a filter still
   can't kick him out of the app.
