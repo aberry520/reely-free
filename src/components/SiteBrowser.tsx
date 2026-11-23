@@ -64,15 +64,14 @@ export default function SiteBrowser({
   blockUrlFragments,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
-  // Getting home feature master: when off, every nav aid stands down
-  // (the anti-stuck rule below still keeps the floating button).
-  const navMaster = settings.featureGettingHome;
+  // Getting Home has no feature master (Austin's hierarchy,
+  // 2026-11-23) — each way home is governed by its own toggle.
   const navCfg = {
-    button: navMaster && settings.navButton,
-    bottomSwipe: navMaster && settings.navBottomSwipe,
-    leftEdge: navMaster && settings.navLeftEdge,
-    rightEdge: navMaster && settings.navRightEdge,
-    backButton: navMaster && settings.navBackButton,
+    button: settings.navButton,
+    bottomSwipe: settings.navBottomSwipe,
+    leftEdge: settings.navLeftEdge,
+    rightEdge: settings.navRightEdge,
+    backButton: settings.navBackButton,
   };
   const theme = useTheme();
   const insets = useSafeAreaInsets();

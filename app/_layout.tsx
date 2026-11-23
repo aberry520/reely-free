@@ -17,8 +17,7 @@ import { useTheme } from '../src/lib/theme';
 function AppStack() {
   const theme = useTheme();
   const { settings } = useSettings();
-  // Getting home feature master gates the left-edge gesture too.
-  const leftEdge = settings.featureGettingHome && settings.navLeftEdge;
+  const leftEdge = settings.navLeftEdge;
   return (
     <>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />

@@ -1,5 +1,12 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import type { FilterSettings } from '../src/lib/settings';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
@@ -29,23 +36,54 @@ function ToggleRow({
   );
 }
 
-// Feature header (Austin's ask, 2026-11-23): each feature gets an
-// obvious band — a filled header block with the feature name big and
-// its master switch on the right. The master is a real off switch for
-// the whole feature, not just a folder: off means the door runs plain
-// (or the nav aids stand down) AND the feature's own toggles below
-// are hidden, so Settings only shows what's actually in play. The
-// sub-toggle values are kept, so switching back on restores them.
+// Group header (Austin's hierarchy, 2026-11-23): "Supported apps" and
+// "Getting Home" are plain groupings with NO toggle of their own.
+// Tapping the band collapses or re-opens everything under it.
+function GroupHeader({
+  title,
+  collapsed,
+  onToggleCollapse,
+}: {
+  title: string;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onToggleCollapse}
+      style={[
+        styles.groupHeader,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <Text style={[styles.groupTitle, { color: theme.text }]}>{title}</Text>
+      <Text style={[styles.chevron, { color: theme.muted }]}>
+        {collapsed ? '▸' : '▾'}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Feature header: one per supported app, carrying that app's master
+// switch. The master is a real off switch for the whole feature — off
+// means the door leaves the home screen and its toggles below are
+// hidden. Tapping the band (not the switch) collapses or re-opens the
+// feature's toggles manually, without changing the master.
 function FeatureHeader({
   title,
   detail,
   value,
   onChange,
+  collapsed,
+  onToggleCollapse,
 }: {
   title: string;
   detail: string;
   value: boolean;
   onChange: (v: boolean) => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }) {
   const theme = useTheme();
   return (
@@ -55,14 +93,18 @@ function FeatureHeader({
         { backgroundColor: theme.surface, borderColor: theme.border },
       ]}
     >
-      <View style={styles.rowText}>
+      <Pressable style={styles.rowText} onPress={onToggleCollapse}>
         <Text style={[styles.featureTitle, { color: theme.text }]}>
           {title}
+          <Text style={[styles.chevronInline, { color: theme.muted }]}>
+            {'  '}
+            {value ? (collapsed ? '▸' : '▾') : ''}
+          </Text>
         </Text>
         <Text style={[styles.rowDetail, { color: theme.muted }]}>
           {detail}
         </Text>
-      </View>
+      </Pressable>
       <Switch value={value} onValueChange={onChange} />
     </View>
   );
@@ -76,122 +118,153 @@ export default function SettingsScreen() {
     (v: boolean) =>
       update({ [key]: v });
 
+  // Manual collapse state for each section (view-only; the masters
+  // above are the actual feature switches). Everything starts open.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const isCollapsed = (k: string) => !!collapsed[k];
+  const toggleCollapse = (k: string) =>
+    setCollapsed((prev) => ({ ...prev, [k]: !prev[k] }));
+
+  const appsCollapsed = isCollapsed('apps');
+  const showFb =
+    !appsCollapsed && settings.featureFacebook && !isCollapsed('facebook');
+  const showYt =
+    !appsCollapsed && settings.featureYouTube && !isCollapsed('youtube');
+  const showGuest =
+    !appsCollapsed &&
+    settings.featureGuestMarketplace &&
+    !isCollapsed('guest');
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
     >
-      <FeatureHeader
-        title="YouTube"
-        detail="Filters for the YouTube door. Off = the YouTube door leaves the home screen entirely."
-        value={settings.featureYouTube}
-        onChange={set('featureYouTube')}
+      <GroupHeader
+        title="Supported apps"
+        collapsed={appsCollapsed}
+        onToggleCollapse={() => toggleCollapse('apps')}
       />
-      {settings.featureYouTube && (
+      {!appsCollapsed && (
         <>
-          <ToggleRow
-            label="Block Shorts"
-            detail="Hides Shorts shelves and the Shorts button. A Shorts link someone sends you opens as a normal video instead."
-            value={settings.ytBlockShorts}
-            onChange={set('ytBlockShorts')}
+          <FeatureHeader
+            title="Facebook"
+            detail="Off = the Facebook door leaves the home screen. Marketplace inside Facebook is never filtered either way."
+            value={settings.featureFacebook}
+            onChange={set('featureFacebook')}
+            collapsed={isCollapsed('facebook')}
+            onToggleCollapse={() => toggleCollapse('facebook')}
           />
-          <ToggleRow
-            label="Open on Subscriptions"
-            detail="YouTube's home page redirects to your subscriptions feed."
-            value={settings.ytLandOnSubs}
-            onChange={set('ytLandOnSubs')}
+          {showFb && (
+            <>
+              <ToggleRow
+                label="Block Reels"
+                detail="Hides Reels in the feed and Watch, and the shortcuts that lead to them."
+                value={settings.fbBlockReels}
+                onChange={set('fbBlockReels')}
+              />
+              <ToggleRow
+                label="Hide suggested posts"
+                detail="Hides every 'Suggested for you' post — pages, groups and people Facebook recommends."
+                value={settings.fbHideSuggested}
+                onChange={set('fbHideSuggested')}
+              />
+              <ToggleRow
+                label="Hide sponsored posts"
+                detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
+                value={settings.fbHideSponsored}
+                onChange={set('fbHideSponsored')}
+              />
+              <ToggleRow
+                label="Block 'Open app' bar"
+                detail="Hides the Open app bar at the bottom of the feed and similar get-the-app banners."
+                value={settings.fbBlockAppPromo}
+                onChange={set('fbBlockAppPromo')}
+              />
+              <ToggleRow
+                label="Header returns on scroll up"
+                detail="Like the app: the top bar scrolls away going down and comes back as soon as you scroll up, instead of only at the very top."
+                value={settings.fbStickyHeader}
+                onChange={set('fbStickyHeader')}
+              />
+            </>
+          )}
+
+          <FeatureHeader
+            title="YouTube"
+            detail="Off = the YouTube door leaves the home screen."
+            value={settings.featureYouTube}
+            onChange={set('featureYouTube')}
+            collapsed={isCollapsed('youtube')}
+            onToggleCollapse={() => toggleCollapse('youtube')}
           />
-          <ToggleRow
-            label="Hide Up Next"
-            detail="Hides the autoplaying list of follow-on videos on watch pages."
-            value={settings.ytHideUpNext}
-            onChange={set('ytHideUpNext')}
+          {showYt && (
+            <>
+              <ToggleRow
+                label="Block Shorts"
+                detail="Hides Shorts shelves and the Shorts button. A Shorts link someone sends you opens as a normal video instead."
+                value={settings.ytBlockShorts}
+                onChange={set('ytBlockShorts')}
+              />
+              <ToggleRow
+                label="Open on Subscriptions"
+                detail="YouTube's home page redirects to your subscriptions feed."
+                value={settings.ytLandOnSubs}
+                onChange={set('ytLandOnSubs')}
+              />
+              <ToggleRow
+                label="Hide Up Next"
+                detail="Hides the autoplaying list of follow-on videos on watch pages."
+                value={settings.ytHideUpNext}
+                onChange={set('ytHideUpNext')}
+              />
+              <ToggleRow
+                label="Block app popups"
+                detail="Hides the 'Get the best experience' popup and the Open App button in the header."
+                value={settings.ytBlockAppPromo}
+                onChange={set('ytBlockAppPromo')}
+              />
+              <ToggleRow
+                label="Swipe down on video to go back"
+                detail="Swipe down on the playing video to return to the feed, like the app. The video stops — the web version has no mini-player to shrink into."
+                value={settings.ytSwipeDownBack}
+                onChange={set('ytSwipeDownBack')}
+              />
+            </>
+          )}
+
+          <FeatureHeader
+            title="Guest Marketplace"
+            detail="The 'Marketplace — no account' door. Off = that door leaves the home screen."
+            value={settings.featureGuestMarketplace}
+            onChange={set('featureGuestMarketplace')}
+            collapsed={isCollapsed('guest')}
+            onToggleCollapse={() => toggleCollapse('guest')}
           />
-          <ToggleRow
-            label="Block app popups"
-            detail="Hides the 'Get the best experience' popup and the Open App button in the header."
-            value={settings.ytBlockAppPromo}
-            onChange={set('ytBlockAppPromo')}
-          />
-          <ToggleRow
-            label="Swipe down on video to go back"
-            detail="Swipe down on the playing video to return to the feed, like the app. The video stops — the web version has no mini-player to shrink into."
-            value={settings.ytSwipeDownBack}
-            onChange={set('ytSwipeDownBack')}
-          />
+          {showGuest && (
+            <>
+              <ToggleRow
+                label="Dismiss the login prompt"
+                detail="Automatically closes Facebook's login prompt so you can keep browsing. Experimental — Facebook may still wall off some listings, and messaging or selling always needs an account. If the wall stops dismissing, use Reset guest on that screen."
+                value={settings.mpGuestDismissLogin}
+                onChange={set('mpGuestDismissLogin')}
+              />
+              <ToggleRow
+                label="Block the bottom login bar"
+                detail="Hides the login prompt bar pinned to the bottom of the guest Marketplace screen."
+                value={settings.mpGuestBlockLoginBar}
+                onChange={set('mpGuestBlockLoginBar')}
+              />
+            </>
+          )}
         </>
       )}
 
-      <FeatureHeader
-        title="Facebook"
-        detail="Filters for the Facebook door. Off = the Facebook door leaves the home screen entirely. Marketplace inside Facebook is never filtered either way."
-        value={settings.featureFacebook}
-        onChange={set('featureFacebook')}
+      <GroupHeader
+        title="Getting Home"
+        collapsed={isCollapsed('home')}
+        onToggleCollapse={() => toggleCollapse('home')}
       />
-      {settings.featureFacebook && (
-        <>
-          <ToggleRow
-            label="Block Reels"
-            detail="Hides Reels in the feed and Watch, and the shortcuts that lead to them."
-            value={settings.fbBlockReels}
-            onChange={set('fbBlockReels')}
-          />
-          <ToggleRow
-            label="Hide suggested posts"
-            detail="Hides every 'Suggested for you' post — pages, groups and people Facebook recommends."
-            value={settings.fbHideSuggested}
-            onChange={set('fbHideSuggested')}
-          />
-          <ToggleRow
-            label="Hide sponsored posts"
-            detail="Hides posts labelled Sponsored. Best effort — some ad formats slip through."
-            value={settings.fbHideSponsored}
-            onChange={set('fbHideSponsored')}
-          />
-          <ToggleRow
-            label="Block 'Open app' bar"
-            detail="Hides the Open app bar at the bottom of the feed and similar get-the-app banners."
-            value={settings.fbBlockAppPromo}
-            onChange={set('fbBlockAppPromo')}
-          />
-          <ToggleRow
-            label="Header returns on scroll up"
-            detail="Like the app: the top bar scrolls away going down and comes back as soon as you scroll up, instead of only at the very top."
-            value={settings.fbStickyHeader}
-            onChange={set('fbStickyHeader')}
-          />
-        </>
-      )}
-
-      <FeatureHeader
-        title="Guest Marketplace"
-        detail="The 'Marketplace — no account' door. Off = that door leaves the home screen entirely."
-        value={settings.featureGuestMarketplace}
-        onChange={set('featureGuestMarketplace')}
-      />
-      {settings.featureGuestMarketplace && (
-        <>
-          <ToggleRow
-            label="Dismiss the login prompt"
-            detail="Automatically closes Facebook's login prompt so you can keep browsing. Experimental — Facebook may still wall off some listings, and messaging or selling always needs an account. If the wall stops dismissing, use Reset guest on that screen."
-            value={settings.mpGuestDismissLogin}
-            onChange={set('mpGuestDismissLogin')}
-          />
-          <ToggleRow
-            label="Block the bottom login bar"
-            detail="Hides the login prompt bar pinned to the bottom of the guest Marketplace screen."
-            value={settings.mpGuestBlockLoginBar}
-            onChange={set('mpGuestBlockLoginBar')}
-          />
-        </>
-      )}
-
-      <FeatureHeader
-        title="Getting home"
-        detail="Ways back to the home screen from a site. Off = all of them stand down — except the floating button, which always stays so you can't get stuck."
-        value={settings.featureGettingHome}
-        onChange={set('featureGettingHome')}
-      />
-      {settings.featureGettingHome && (
+      {!isCollapsed('home') && (
         <>
           <ToggleRow
             label="Floating home button"
@@ -227,9 +300,10 @@ export default function SettingsScreen() {
       )}
 
       <Text style={[styles.note, { color: theme.muted }]}>
-        Changes apply the next time you open a door. Marketplace inside
-        Facebook is never filtered, the guest Marketplace door is separate
-        and experimental, and Messenger stays in its own app. The app follows
+        Changes apply the next time you open a door. Tap a header to
+        collapse or re-open its section. Marketplace inside Facebook is
+        never filtered, the guest Marketplace door is separate and
+        experimental, and Messenger stays in its own app. The app follows
         your phone's light/dark setting automatically. If you turn every
         way home off, the floating button stays anyway so you can't get stuck.
       </Text>
@@ -239,9 +313,10 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
-  featureHeader: {
+  groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 14,
@@ -249,11 +324,26 @@ const styles = StyleSheet.create({
     marginTop: 26,
     marginBottom: 6,
   },
-  featureTitle: { fontSize: 20, fontWeight: '800' },
+  groupTitle: { fontSize: 22, fontWeight: '800' },
+  chevron: { fontSize: 18, fontWeight: '700' },
+  chevronInline: { fontSize: 15, fontWeight: '700' },
+  featureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 14,
+    marginLeft: 14,
+    marginBottom: 6,
+  },
+  featureTitle: { fontSize: 18, fontWeight: '800' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    marginLeft: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowText: { flex: 1, paddingRight: 12 },

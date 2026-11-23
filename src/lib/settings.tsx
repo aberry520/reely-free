@@ -13,17 +13,17 @@ import React, {
 // ALL suggested content.
 export interface FilterSettings {
   // Feature master toggles (Austin's ask, 2026-11-23): one switch per
-  // feature at the top of its Settings section. Turning a feature off
-  // hides its sub-toggles in Settings, removes its door from the home
-  // screen, AND switches the feature itself off — the filter script for that
-  // door goes inert, and the Getting home aids all stand down (the
-  // anti-stuck floating button still stays, per the long-standing
-  // rule). Sub-toggle values are kept, so turning the feature back on
-  // restores the previous setup.
+  // supported app at the top of its Settings block, under the
+  // "Supported apps" group header. Turning a feature off hides its
+  // sub-toggles in Settings, removes its door from the home screen,
+  // AND switches the feature itself off (its filter script goes
+  // inert). Sub-toggle values are kept, so turning the feature back
+  // on restores the previous setup. Getting Home has NO master — it
+  // is a plain group header in the hierarchy he specified; its ways
+  // home are governed by their own toggles below.
   featureYouTube: boolean;
   featureFacebook: boolean;
   featureGuestMarketplace: boolean;
-  featureGettingHome: boolean;
   // YouTube
   ytBlockShorts: boolean;
   ytLandOnSubs: boolean;
@@ -56,7 +56,6 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   featureYouTube: true,
   featureFacebook: true,
   featureGuestMarketplace: true,
-  featureGettingHome: true,
   ytBlockShorts: true,
   ytLandOnSubs: true,
   ytHideUpNext: true,
