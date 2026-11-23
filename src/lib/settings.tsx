@@ -70,6 +70,7 @@ export interface FilterSettings {
   mpaStayInMarketplace: boolean;
   mpaAllowMessages: boolean;
   mpaBlockAppPromo: boolean;
+  mpaBrandHeader: boolean;
   // Guest Marketplace (experimental desktop door). No location settings
   // on purpose (his decision, 2026-11-23): typed city/radius fields and
   // then a "use my location" toggle both failed to move Facebook, which
@@ -120,6 +121,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   mpaStayInMarketplace: true,
   mpaAllowMessages: true,
   mpaBlockAppPromo: true,
+  mpaBrandHeader: true,
   mpGuestDismissLogin: true,
   mpGuestBlockLoginBar: true,
   mpGuestNativeShare: true,

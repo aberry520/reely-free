@@ -477,6 +477,12 @@ export default function SettingsScreen() {
                 value={settings.mpaBlockAppPromo}
                 onChange={set('mpaBlockAppPromo')}
               />
+              <ToggleRow
+                label="Reely Free header"
+                detail="Covers Facebook's icon bar at the very top with a Reely Free strip — the logo with 'Reely' and 'Free' either side. Marketplace's own header underneath stays."
+                value={settings.mpaBrandHeader}
+                onChange={set('mpaBrandHeader')}
+              />
               <UsageLimitRows
                 usedSec={usage.marketplaceAccount ?? 0}
                 limitMin={settings.mpaDailyLimitMin}
