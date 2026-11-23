@@ -23,6 +23,18 @@ interface SiteBrowserProps {
   // URL fragments where pull-to-refresh is disabled — e.g. YouTube watch
   // pages, where a downward drag means "go back", not "reload".
   noRefreshPaths?: string[];
+  // Override the WebView user agent — the guest Marketplace door asks for
+  // the desktop site, which treats logged-out visitors differently.
+  userAgent?: string;
+  // Non-persistent WebView session: cookies/cache are not shared with the
+  // other doors, so the guest door never touches his Facebook login.
+  incognito?: boolean;
+  // Show a "Reset guest" pill that remounts the WebView fresh — the known
+  // recovery when Facebook's login wall stops being dismissible.
+  resettable?: boolean;
+  // URL fragments that must never load (e.g. Facebook's login/signup
+  // pages on the guest door, where signing in is not the point).
+  blockUrlFragments?: string[];
 }
 
 const BTN = 50;
@@ -44,6 +56,10 @@ export default function SiteBrowser({
   homeUrl,
   buildScript,
   noRefreshPaths,
+  userAgent,
+  incognito,
+  resettable,
+  blockUrlFragments,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   const theme = useTheme();
@@ -62,6 +78,8 @@ export default function SiteBrowser({
   // current URL is tracked too, for pull-to-refresh rules.
   const [canGoBack, setCanGoBack] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(homeUrl);
+  // Bumping this remounts the WebView from scratch (guest session reset).
+  const [resetKey, setResetKey] = useState(0);
   const pullToRefresh = !(
     noRefreshPaths ?? []
   ).some((p) => currentUrl.includes(p));
@@ -222,9 +240,11 @@ export default function SiteBrowser({
       ]}
     >
       <WebView
-        key={script}
+        key={script + ':' + resetKey}
         ref={webRef}
         source={{ uri: homeUrl }}
+        userAgent={userAgent}
+        incognito={incognito}
         injectedJavaScriptBeforeContentLoaded={script}
         javaScriptEnabled
         domStorageEnabled
@@ -246,6 +266,11 @@ export default function SiteBrowser({
           const url = req.url;
           if (url === 'about:blank') return true;
           if (url.startsWith('http://') || url.startsWith('https://')) {
+            if (
+              (blockUrlFragments ?? []).some((f) => url.includes(f))
+            ) {
+              return false;
+            }
             return !(
               url.includes('apps.apple.com') ||
               url.includes('play.google.com')
@@ -262,6 +287,23 @@ export default function SiteBrowser({
           </View>
         )}
       />
+      {resettable && (
+        <Pressable
+          accessibilityLabel="Reset guest session"
+          onPress={() => setResetKey((k) => k + 1)}
+          style={[
+            styles.resetPill,
+            {
+              backgroundColor: theme.homeBtnBg,
+              top: insets.top + 10,
+            },
+          ]}
+        >
+          <Text style={[styles.resetPillText, { color: theme.homeBtnGlyph }]}>
+            Reset guest
+          </Text>
+        </Pressable>
+      )}
       {settings.navBackButton && canGoBack && (
         <Pressable
           accessibilityLabel="Go back"
@@ -321,6 +363,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  resetPill: {
+    position: 'absolute',
+    right: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
+  resetPillText: { fontSize: 13, fontWeight: '600' },
   backBtn: {
     position: 'absolute',
     left: 12,

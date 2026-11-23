@@ -111,6 +111,16 @@ export default function SettingsScreen() {
         onChange={set('fbStickyHeader')}
       />
 
+      <Text style={[styles.section, { color: theme.text }]}>
+        Guest Marketplace
+      </Text>
+      <ToggleRow
+        label="Dismiss the login prompt"
+        detail="On the 'Marketplace — no account' door: automatically closes Facebook's login prompt so you can keep browsing. Experimental — Facebook may still wall off some listings, and messaging or selling always needs an account. If the wall stops dismissing, use Reset guest on that screen."
+        value={settings.mpGuestDismissLogin}
+        onChange={set('mpGuestDismissLogin')}
+      />
+
       <Text style={[styles.section, { color: theme.text }]}>Getting home</Text>
       <ToggleRow
         label="Floating home button"
@@ -144,8 +154,9 @@ export default function SettingsScreen() {
       />
 
       <Text style={[styles.note, { color: theme.muted }]}>
-        Changes apply the next time you open Facebook or YouTube. Marketplace
-        is never filtered, and Messenger stays in its own app. The app follows
+        Changes apply the next time you open a door. Marketplace inside
+        Facebook is never filtered, the guest Marketplace door is separate
+        and experimental, and Messenger stays in its own app. The app follows
         your phone's light/dark setting automatically. If you turn every
         way home off, the floating button stays anyway so you can't get stuck.
       </Text>

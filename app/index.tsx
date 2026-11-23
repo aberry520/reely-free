@@ -4,9 +4,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../src/lib/theme';
 
-// Home: two doors. Facebook and YouTube, minus the parts designed to keep
-// him scrolling. Marketplace stays — he sells there. Messenger stays in its
-// own app, by his choice. Colors follow the phone's light/dark setting.
+// Home: three doors. Facebook and YouTube, minus the parts designed to
+// keep him scrolling, plus an experimental guest Marketplace door that
+// browses without an account. Marketplace also stays in Facebook — he
+// sells there. Messenger stays in its own app, by his choice. Colors
+// follow the phone's light/dark setting.
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -46,6 +48,17 @@ export default function HomeScreen() {
       </Pressable>
 
       <Pressable
+        style={[styles.card, styles.marketplaceCard]}
+        onPress={() => router.push('/marketplace')}
+      >
+        <Text style={styles.cardTitle}>Marketplace — no account</Text>
+        <Text style={styles.cardDetail}>
+          Experimental: browse and search Marketplace without signing in.
+          Look only — messaging and selling still need an account.
+        </Text>
+      </Pressable>
+
+      <Pressable
         style={styles.settingsButton}
         onPress={() => router.push('/settings')}
       >
@@ -68,6 +81,7 @@ const styles = StyleSheet.create({
   },
   facebookCard: { backgroundColor: '#1877f2' },
   youtubeCard: { backgroundColor: '#c4302b' },
+  marketplaceCard: { backgroundColor: '#0f766e' },
   cardTitle: { fontSize: 22, fontWeight: '700', color: '#fff' },
   cardDetail: { fontSize: 14, color: '#eef', marginTop: 6, lineHeight: 20 },
   settingsButton: {

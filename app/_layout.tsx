@@ -31,6 +31,14 @@ function AppStack() {
           }}
         />
         <Stack.Screen
+          name="marketplace"
+          options={{
+            headerShown: false,
+            gestureEnabled: settings.navLeftEdge,
+            animation: 'slide_from_left',
+          }}
+        />
+        <Stack.Screen
           name="youtube"
           options={{
             headerShown: false,
