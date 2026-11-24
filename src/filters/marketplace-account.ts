@@ -113,11 +113,51 @@ export function buildMarketplaceAccountScript(
       var raw = sessionStorage.getItem('rf-mpa-diag');
       var d = raw ? JSON.parse(raw) : { paths: [], guard: '' };
       panel.textContent =
-        'DIAG-MPA path: ' + location.pathname + '\\n' +
+        'DIAG-MPA tap: ' + (d.tap || 'none yet') + '\\n' +
+        'path: ' + location.pathname + '\\n' +
         'history:\\n' + (d.paths.join('\\n') || '(none)') + '\\n' +
         'guard: ' + (d.guard || 'never fired');
     } catch (e) {}
   }
+  // Record the last tap into the same sessionStorage record, so a
+  // bounce can't erase what the tap actually hit. Records only —
+  // it never prevents or stops anything.
+  document.addEventListener('click', function (ev) {
+    try {
+      var t = ev.target;
+      var tag = t && t.tagName ? t.tagName.toLowerCase() : '?';
+      var cls = '';
+      try {
+        cls = (t && t.className && t.className.toString
+          ? t.className.toString() : '').slice(0, 30);
+      } catch (e) {}
+      var a = t && t.closest ? t.closest('a[href]') : null;
+      var href = a ? (a.getAttribute('href') || '').slice(0, 50) : '-';
+      var isImg = !!(t && t.tagName === 'IMG');
+      var hasBg = false;
+      var g = 0, bgEl = (t && t.nodeType === 1) ? t : null;
+      while (bgEl && g < 3) {
+        g++;
+        var bg = '';
+        try { bg = getComputedStyle(bgEl).backgroundImage || ''; } catch (e) {}
+        if (bg.indexOf('url(') >= 0) { hasBg = true; break; }
+        bgEl = bgEl.parentElement;
+      }
+      var y = 0, w = 0;
+      try {
+        var r = t.getBoundingClientRect();
+        y = Math.round(r.top + (window.scrollY || 0));
+        w = Math.round(Math.max(r.width, r.height));
+      } catch (e) {}
+      var raw = sessionStorage.getItem('rf-mpa-diag');
+      var d = raw ? JSON.parse(raw) : { paths: [], guard: '' };
+      d.tap = tag + '.' + cls + ' href=' + href +
+        ' img=' + (isImg ? 'y' : 'n') + ' bg=' + (hasBg ? 'y' : 'n') +
+        ' y=' + y + ' size=' + w;
+      sessionStorage.setItem('rf-mpa-diag', JSON.stringify(d));
+      diagPanel();
+    } catch (e) {}
+  }, true);
   if (S.stay) {
     var lastPath = '';
     function guard() {

@@ -37,6 +37,11 @@ export const PHOTO_VIEWER_JS = `
         var id = itemId();
         var out = [];
         if (!id) return out;
+        function addSrc(src) {
+          if (!src || src.indexOf('http') !== 0) return;
+          if (out.indexOf(src) < 0) out.push(src);
+        }
+        // (a) <img> photos linked to this item (desktop + mobile).
         var imgs = document.querySelectorAll('img');
         for (var i = 0; i < imgs.length; i++) {
           var im = imgs[i];
@@ -44,9 +49,24 @@ export const PHOTO_VIEWER_JS = `
           if (!a) continue;
           var href = a.getAttribute('href') || '';
           if (href.indexOf('/marketplace/item/' + id) < 0) continue;
-          var src = im.currentSrc || im.src || '';
-          if (!src || src.indexOf('http') !== 0) continue;
-          if (out.indexOf(src) < 0) out.push(src);
+          addSrc(im.currentSrc || im.src || '');
+        }
+        // (b) Background-image photos in the gallery zone at the top
+        // of the document (mobile site: the main photo and its
+        // thumbnails are <div>s, not <img>s). Only large elements,
+        // so icons and avatars never qualify.
+        var scrollY = window.scrollY || window.pageYOffset || 0;
+        var divs = document.querySelectorAll('div');
+        for (var j = 0; j < divs.length; j++) {
+          var d = divs[j];
+          var r = d.getBoundingClientRect();
+          if (Math.max(r.width, r.height) < 60) continue;
+          var absY = r.top + scrollY;
+          if (absY < 0 || absY >= 900) continue;
+          var bg = '';
+          try { bg = getComputedStyle(d).backgroundImage || ''; } catch (e) {}
+          var m = bg.match(/url\(["']?(https?:[^"')]+)["']?\)/);
+          if (m) addSrc(m[1]);
         }
         return out;
       }
@@ -169,11 +189,15 @@ export const PHOTO_VIEWER_JS = `
           closeViewer();
         }
       });
-      // Capture-phase tap intercept, on item pages only: the
-      // tapped photo (main photo or thumbnail — any img whose link
-      // points at THIS item) opens our viewer instead of whatever
-      // Facebook would do with the tap. Related listings below
-      // point at other items, so their taps pass through untouched.
+      // Capture-phase tap intercept, on item pages only. The
+      // listing's own photo opens our viewer instead of whatever
+      // Facebook would do with the tap. Two shapes: an <img> whose
+      // link points at this item (desktop), or a large photo in
+      // the gallery zone at the top of the document — an <img> or
+      // a background-image <div> (mobile site, where the photo has
+      // no link at all). Related listings sit far below the gallery
+      // zone, so their taps pass through untouched. Small elements
+      // (icons, avatars) never qualify.
       document.addEventListener('click', function (ev) {
         try {
           if (!itemId()) return;
@@ -186,13 +210,34 @@ export const PHOTO_VIEWER_JS = `
             if (at && at.tagName === 'IMG') img = at;
             else if (t && t.querySelector) img = t.querySelector('img');
           }
-          if (!img) return;
-          var a = img.closest ? img.closest('a[href]') : null;
-          if (!a) return;
-          var href = a.getAttribute('href') || '';
-          if (href.indexOf('/marketplace/item/' + itemId()) < 0) return;
-          var src = img.currentSrc || img.src || '';
-          if (!src) return;
+          var src = '';
+          var el = null;
+          if (img) {
+            src = img.currentSrc || img.src || '';
+            el = img;
+          }
+          if (!src) {
+            var bgEl = (t && t.nodeType === 1) ? t : null;
+            if (!bgEl && at) bgEl = at;
+            var g = 0;
+            while (bgEl && g < 4) {
+              g++;
+              var bg = '';
+              try { bg = getComputedStyle(bgEl).backgroundImage || ''; } catch (e) {}
+              var m = bg.match(/url\(["']?(https?:[^"')]+)["']?\)/);
+              if (m) { src = m[1]; el = bgEl; break; }
+              bgEl = bgEl.parentElement;
+            }
+          }
+          if (!src || src.indexOf('http') !== 0 || !el) return;
+          var r = el.getBoundingClientRect();
+          if (Math.max(r.width, r.height) < 60) return;
+          var a = el.closest ? el.closest('a[href]') : null;
+          var href = a ? (a.getAttribute('href') || '') : '';
+          var sameItem = href.indexOf('/marketplace/item/' + itemId()) >= 0;
+          var absY = r.top + (window.scrollY || window.pageYOffset || 0);
+          var inGallery = absY >= 0 && absY < 900;
+          if (!sameItem && !inGallery) return;
           ev.preventDefault();
           ev.stopPropagation();
           if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
