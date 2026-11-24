@@ -143,18 +143,15 @@ export const MESSENGER_JS = `
       return null;
     } catch (e) { return null; }
   }
-  // Find the Message button element itself by searching DOWN
-  // the DOM: the first element whose whole trimmed text is
-  // exactly "Message". (The tap-time helper __rfFindMsgControl
-  // walks UP from a tap target and must not be used here — called
-  // with document.body it walks up past the page and finds
-  // nothing, which is why the fiber walk silently never ran.)
-  function __rfFindMsgButton() {
+  // Find the React fiber key on a DOM element, if it has one.
+  // getOwnPropertyNames (not Object.keys) catches the key even
+  // when it is non-enumerable, and any __react* prefix is
+  // accepted in case the React version names it differently.
+  function __rfFindFiberKey(el) {
     try {
-      var els = document.querySelectorAll('a, button, [role="button"], div, span');
-      for (var i = 0; i < els.length; i++) {
-        var txt = (els[i].textContent || '').trim().toLowerCase();
-        if (txt === 'message') return els[i];
+      var names = Object.getOwnPropertyNames(el);
+      for (var i = 0; i < names.length; i++) {
+        if (names[i].indexOf('__react') === 0) return names[i];
       }
       return null;
     } catch (e) { return null; }
@@ -202,12 +199,17 @@ export const MESSENGER_JS = `
       return null;
     } catch (e) { return null; }
   }
-  // The seller's user id from React state: find the fiber on the
-  // Message button div, walk up the fiber tree and search each
-  // level's memoizedProps for the seller. Cached per item page;
-  // a null result is retried at most every 3 seconds (the listing
-  // data can arrive after the first attempt).
-  var __rfFiberCache = { path: '', id: null, at: 0 };
+  // The seller's user id from React state: walk the fiber from
+  // a starting element and search each level's memoizedProps for
+  // the seller. Tries every "Message" button on the page plus
+  // the seller-area container (the first text match can be a
+  // non-React element with no fiber, while the real button or
+  // the seller area has one). Cached per item page; a null
+  // result is retried at most every 3 seconds (the listing data
+  // can arrive after the first attempt). The cache also records
+  // whether any candidate had a fiber key and how many walks
+  // ran, for the diagnostic panel.
+  var __rfFiberCache = { path: '', id: null, at: 0, hadKey: false, tried: 0 };
   function __rfSellerIdFromFiber() {
     try {
       var path = location.pathname || '';
@@ -215,49 +217,53 @@ export const MESSENGER_JS = `
       if (__rfFiberCache.path === path && __rfFiberCache.id) return __rfFiberCache.id;
       if (__rfFiberCache.path === path && (now - __rfFiberCache.at) < 3000) return null;
       var id = null;
-      var btn = __rfFindMsgButton();
-      if (btn) {
-        var key = null;
-        var keys = Object.keys(btn);
-        for (var i = 0; i < keys.length; i++) {
-          if (keys[i].indexOf('__reactFiber$') === 0 ||
-              keys[i].indexOf('__reactInternalInstance$') === 0) { key = keys[i]; break; }
-        }
-        if (key) {
-          var itemId = '';
-          var pm = path.match(/\\/marketplace\\/item\\/(\\d+)/);
-          if (pm) itemId = pm[1];
-          var node = btn[key];
-          var seen = 0;
-          while (node && seen < 25) {
-            seen++;
-            if (node.memoizedProps) {
-              id = __rfSearchPropsForSeller(node.memoizedProps, 0, itemId, []);
-              if (id) break;
-            }
-            node = node.return;
-          }
+      var hadKey = false, tried = 0;
+      var itemId = '';
+      var pm = path.match(/\\/marketplace\\/item\\/(\\d+)/);
+      if (pm) itemId = pm[1];
+      var candidates = [];
+      var els = document.querySelectorAll('a, button, [role="button"], div, span');
+      for (var i = 0; i < els.length; i++) {
+        var txt = (els[i].textContent || '').trim().toLowerCase();
+        if (txt === 'message') candidates.push(els[i]);
+      }
+      var all = document.querySelectorAll('div, section, article');
+      for (var j = 0; j < all.length; j++) {
+        var t = (all[j].textContent || '');
+        if (t.indexOf('Seller details') >= 0 || t.indexOf('Seller information') >= 0) {
+          candidates.push(all[j]);
+          break;
         }
       }
-      __rfFiberCache = { path: path, id: id, at: now };
+      for (var k = 0; k < candidates.length && !id; k++) {
+        var key = __rfFindFiberKey(candidates[k]);
+        if (!key) continue;
+        hadKey = true;
+        tried++;
+        var node = candidates[k][key];
+        var seen = 0;
+        while (node && seen < 25) {
+          seen++;
+          if (node.memoizedProps) {
+            id = __rfSearchPropsForSeller(node.memoizedProps, 0, itemId, []);
+            if (id) break;
+          }
+          node = node.return;
+        }
+      }
+      __rfFiberCache = { path: path, id: id, at: now, hadKey: hadKey, tried: tried };
       return id;
     } catch (e) { return null; }
   }
   // Diagnostic for the fiber seller-id source, for the MPA
-  // panel on item pages: whether the Message button carries a
-  // React fiber key, and the id the walk found (if any).
+  // panel on item pages: whether any starting element carried a
+  // React fiber key, how many fiber walks ran, and the id the
+  // walk found (if any).
   function __rfFiberDiag() {
     try {
-      var btn = __rfFindMsgButton();
-      if (!btn) return 'nobtn';
-      var key = null;
-      var keys = Object.keys(btn);
-      for (var i = 0; i < keys.length; i++) {
-        if (keys[i].indexOf('__reactFiber$') === 0 ||
-            keys[i].indexOf('__reactInternalInstance$') === 0) { key = keys[i]; break; }
-      }
       var fiberId = __rfSellerIdFromFiber();
-      return 'key=' + (key ? 'yes' : 'no') + ' id=' + (fiberId || 'none');
+      var c = __rfFiberCache;
+      return 'key=' + (c.hadKey ? 'yes' : 'no') + ' tried=' + (c.tried || 0) + ' id=' + (fiberId || 'none');
     } catch (e) { return 'fiberDiag error'; }
   }
   // The seller's numeric user id from the page's embedded data.
