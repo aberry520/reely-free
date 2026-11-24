@@ -115,8 +115,24 @@ export function buildYouTubeScript(settings: FilterSettings): string {
         return;
       }
       if (el && el.isConnected) return;
-      var fg = '';
-      try { fg = getComputedStyle(document.body).color; } catch (e) {}
+      // The words were black-on-black in dark mode: the body's
+      // text color is the browser default (black) on both doors,
+      // not the theme's text color. Pick the color from the page
+      // background instead — dark background gets light text,
+      // light background gets dark text.
+      var fg = '#f5f5f5';
+      try {
+        var els = [document.body, document.documentElement];
+        for (var i = 0; i < els.length; i++) {
+          var bg = getComputedStyle(els[i]).backgroundColor || '';
+          var m = bg.match(/rgba?\\((\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)(?:[,\\s]+([\\d.]+))?\\)/);
+          if (m && (m[4] === undefined || +m[4] > 0)) {
+            var lum = 0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3]);
+            fg = lum < 128 ? '#f5f5f5' : '#111111';
+            break;
+          }
+        }
+      } catch (e) {}
       el = document.createElement('div');
       el.id = 'rf-brand-center';
       el.style.cssText =
