@@ -785,6 +785,10 @@ export default function SiteBrowser({
         cacheEnabled={!incognito}
         pullToRefreshEnabled={pullToRefresh}
         allowsInlineMediaPlayback
+        // PiP is on by default in react-native-webview, but set it
+        // explicitly so the YouTube PiP button (2026-11-24) can
+        // never be silently off.
+        allowsPictureInPictureMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         setSupportMultipleWindows={false}
         onNavigationStateChange={(nav) => {

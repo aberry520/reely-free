@@ -158,6 +158,70 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       (document.body || document.documentElement).appendChild(el);
     } catch (e) {}
   }
+  // PiP button (Austin, 2026-11-24): YouTube's own PiP button in
+  // fullscreen drops PiP immediately — the fullscreen exit
+  // re-initializes the player and kills the PiP session — while
+  // swiping up to the home screen leaves a working PiP window. So
+  // this button triggers PiP directly on the INLINE playing video,
+  // skipping the fullscreen-exit dance entirely. It only shows on
+  // /watch while a video is playing (or already in PiP), sits on
+  // the video's top-right corner, and toggles PiP off when tapped
+  // while PiP is active. Hidden in fullscreen, where the native
+  // player already has its own PiP button.
+  function maintainPipButton() {
+    try {
+      var btn = document.getElementById('rf-pip-btn');
+      var onWatch = (location.pathname || '') === '/watch';
+      var v = document.querySelector('video');
+      var inPip = !!document.pictureInPictureElement;
+      var playing = !!v && !v.paused && !v.ended && v.readyState > 1;
+      var inFs = !!document.fullscreenElement ||
+        !!(v && v.webkitDisplayingFullscreen);
+      if (!onWatch || !v || inFs || (!playing && !inPip)) {
+        if (btn) btn.remove();
+        return;
+      }
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'rf-pip-btn';
+        btn.setAttribute('aria-label', 'Picture in Picture');
+        btn.style.cssText =
+          'position:fixed;z-index:2147483647;width:40px;height:40px;' +
+          'border-radius:20px;border:0;padding:0;' +
+          'background:rgba(0,0,0,0.55);display:flex;' +
+          'align-items:center;justify-content:center;';
+        btn.innerHTML =
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none">' +
+          '<rect x="2" y="4" width="20" height="14" rx="2" stroke="#fff" stroke-width="2"/>' +
+          '<rect x="12" y="12" width="8" height="6" rx="1" fill="#fff"/>' +
+          '</svg>';
+        btn.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          try {
+            var vid = document.querySelector('video');
+            if (!vid) return;
+            if (document.pictureInPictureElement) {
+              document.exitPictureInPicture();
+            } else {
+              if (vid.paused) vid.play();
+              if (vid.requestPictureInPicture) vid.requestPictureInPicture();
+            }
+          } catch (e) {}
+        }, true);
+        (document.body || document.documentElement).appendChild(btn);
+      }
+      // Glue it to the video's top-right corner.
+      var r = v.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        btn.style.left = Math.max(8, r.right - 48) + 'px';
+        btn.style.top = Math.max(8, r.top + 8) + 'px';
+        btn.style.display = 'flex';
+      } else {
+        btn.style.display = 'none';
+      }
+    } catch (e) {}
+  }
   function apply() {
     try {
       var path = location.pathname;
@@ -166,6 +230,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
         if (m) { location.replace('/watch?v=' + m[1]); return; }
       }
       brandHeaderCenter();
+      maintainPipButton();
       if (S.landOnSubs && path === '/') {
         location.replace('/feed/subscriptions');
         return;
@@ -248,6 +313,18 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     obs.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
   setInterval(apply, 3000);
+  // Keep the PiP button glued to the video while scrolling (apply
+  // only runs every 3s, so a scroll would otherwise leave the
+  // button floating over the comments for a moment).
+  var pipScrollPending = false;
+  window.addEventListener('scroll', function () {
+    if (pipScrollPending) return;
+    pipScrollPending = true;
+    requestAnimationFrame(function () {
+      pipScrollPending = false;
+      maintainPipButton();
+    });
+  }, { passive: true });
   // Swipe down on the video to go back, like the app's mini-player gesture
   // (here the video stops — the web player can't float). The touch must
   // start on the player itself, so scrolling the comments never triggers
