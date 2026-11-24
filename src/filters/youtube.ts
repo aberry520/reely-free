@@ -244,6 +244,55 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       }
     } catch (e) {}
   }
+  // TEMPORARY diagnostic (Austin, 2026-11-24): the PiP button
+  // still isn't showing after the findPipVideo fix — second miss,
+  // so stop guessing and report the real page state. Shows the
+  // path, every <video>'s state, what findPipVideo returns, and
+  // whether the button exists. REMOVE in the same commit as the
+  // fix. If this panel never appears, the new code isn't running
+  // at all (stale bundle) — that alone is the answer.
+  function pipDiag() {
+    try {
+      var el = document.getElementById('rf-pip-diag');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'rf-pip-diag';
+        el.style.cssText =
+          'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;' +
+          'background:rgba(0,0,0,0.88);color:#fff;' +
+          'font-family:monospace;font-size:11px;line-height:1.5;' +
+          'padding:8px 10px;border-radius:8px;white-space:pre-wrap;' +
+          'pointer-events:none;';
+        (document.body || document.documentElement).appendChild(el);
+      }
+      var vids = document.querySelectorAll('video');
+      var lines = ['DIAG-PIP path=' + (location.pathname || '')];
+      lines.push('vids=' + vids.length +
+        ' pipEl=' + !!document.pictureInPictureElement +
+        ' fs=' + !!document.fullscreenElement);
+      for (var i = 0; i < vids.length && i < 4; i++) {
+        var vv = vids[i];
+        var rr = vv.getBoundingClientRect();
+        lines.push('v' + i + ': ' + (vv.paused ? 'paused' : 'PLAY') +
+          ' rdy=' + vv.readyState +
+          ' ' + Math.round(rr.width) + 'x' + Math.round(rr.height) +
+          ' @' + Math.round(rr.left) + ',' + Math.round(rr.top) +
+          (vv.webkitDisplayingFullscreen ? ' FULLSCREEN' : ''));
+      }
+      var found = findPipVideo(true);
+      lines.push('find=' + (found ? 'YES' : 'null'));
+      var btn = document.getElementById('rf-pip-btn');
+      if (btn) {
+        var br = btn.getBoundingClientRect();
+        lines.push('btn=YES disp=' + btn.style.display +
+          ' ' + Math.round(br.width) + 'x' + Math.round(br.height) +
+          ' @' + Math.round(br.left) + ',' + Math.round(br.top));
+      } else {
+        lines.push('btn=NO');
+      }
+      el.textContent = lines.join('\\n');
+    } catch (e) {}
+  }
   function apply() {
     try {
       var path = location.pathname;
@@ -253,6 +302,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       }
       brandHeaderCenter();
       maintainPipButton();
+      pipDiag();
       if (S.landOnSubs && path === '/') {
         location.replace('/feed/subscriptions');
         return;
