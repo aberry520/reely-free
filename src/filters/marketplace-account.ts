@@ -79,60 +79,44 @@ export function buildMarketplaceAccountScript(
     return false;
   }
   if (S.stay) {
-    // TEMPORARY diagnostic (2026-11-23): the location chip,
-    // search, categories and other Marketplace popups are all
-    // getting bounced by the guard, but their real paths are
-    // unknown — guessing them would be a third blind rewrite.
-    // Record every path the guard bounces and every tap it
-    // swallows, in sessionStorage so the record survives the
-    // bounce back to the feed, and show it in a panel. Removed
-    // with the fix, once the real paths are known.
-    function diagRecord(kind, path) {
+    // A Marketplace overlay is open (location, search, categories):
+    // Facebook routes these through the home-feed path "/" — the
+    // same path the guard bounces — so the guard has to stand down
+    // while one is open, or the overlay gets kicked back to the
+    // feed the moment it opens. Proved by the diagnostic (his
+    // video, 2026-11-23): every bounce was "/", while the overlay
+    // itself sat on /marketplace. Detect by the overlay's own
+    // header text, which only exists while it is open and visible.
+    function mpaOverlayOpen() {
       try {
-        var raw = sessionStorage.getItem('rf-mpa-diag2');
-        var list = raw ? JSON.parse(raw) : [];
-        var now = new Date();
-        var hh = now.getHours(), mm = now.getMinutes(), ss = now.getSeconds();
-        var t = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
-        list.push(t + ' ' + kind + ' ' + path);
-        while (list.length > 8) list.shift();
-        sessionStorage.setItem('rf-mpa-diag2', JSON.stringify(list));
-        diagPanel();
-      } catch (e) {}
-    }
-    function diagPanel() {
-      try {
-        var list = [];
-        try {
-          var raw = sessionStorage.getItem('rf-mpa-diag2');
-          if (raw) list = JSON.parse(raw);
-        } catch (e) {}
-        var el = document.getElementById('rf-mpa-diag');
-        if (!el) {
-          el = document.createElement('div');
-          el.id = 'rf-mpa-diag';
-          el.style.cssText =
-            'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;' +
-            'background:rgba(20,20,20,0.92);color:#fff;' +
-            'font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;' +
-            'padding:8px 10px;pointer-events:none;white-space:pre-wrap;word-break:break-all;';
-          (document.body || document.documentElement).appendChild(el);
+        if (!document.body) return false;
+        var markers = ['Location and radius', 'Search Marketplace', 'Buy & Sell Groups'];
+        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+        var node;
+        while ((node = walker.nextNode())) {
+          var v = node.nodeValue || '';
+          for (var i = 0; i < markers.length; i++) {
+            if (v.indexOf(markers[i]) !== -1) {
+              var el = node.parentElement;
+              if (el) {
+                var r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) return true;
+              }
+            }
+          }
         }
-        el.textContent = 'DIAG-MPA path=' + location.pathname + '\\n' + list.join('\\n');
-      } catch (e) {}
+        return false;
+      } catch (e) { return false; }
     }
     function guard() {
       try {
-        if (isFb() && !allowed(location.pathname)) {
-          diagRecord('bounce', location.pathname);
+        if (isFb() && !allowed(location.pathname) && !mpaOverlayOpen()) {
           location.replace(HOME);
         }
       } catch (e) {}
     }
     guard();
     setInterval(guard, 600);
-    diagPanel();
-    setInterval(diagPanel, 1000);
     document.addEventListener('click', function (ev) {
       try {
         if (!isFb()) return;
@@ -145,7 +129,6 @@ export function buildMarketplaceAccountScript(
         try { u = new URL(href, location.origin); } catch (e) { return; }
         if (u.origin !== location.origin) return;
         if (!allowed(u.pathname)) {
-          diagRecord('swallow', u.pathname);
           ev.preventDefault();
           ev.stopPropagation();
         }
