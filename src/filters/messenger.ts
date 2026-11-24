@@ -71,7 +71,6 @@ export const MESSENGER_JS = `
       function __rfTryCapture(text, url) {
         try {
           if (!text) return;
-          if ((url || '').indexOf('graphql') < 0) return;
           if (text.indexOf('seller') < 0) return;
           var data = null;
           try { data = JSON.parse(text); } catch (e) { return; }
@@ -79,30 +78,47 @@ export const MESSENGER_JS = `
           __rfFindListingsInJson(data, [], window.__rfSellerByItem);
         } catch (e) {}
       }
+      // Is this response worth parsing? A GraphQL/API URL, or a
+      // JSON content type — the listing data is JSON either way.
+      // (The URL alone is not trusted: the mobile site may serve
+      // the data from an endpoint without 'graphql' in its path.)
+      function __rfIsDataResponse(url, contentType) {
+        try {
+          var u = url || '';
+          if (u.indexOf('graphql') >= 0) return true;
+          if (u.indexOf('/api/') >= 0) return true;
+          var ct = contentType || '';
+          if (ct.indexOf('json') >= 0) return true;
+          return false;
+        } catch (e) { return false; }
+      }
       try {
         if (!window.__rfSellerByItem) window.__rfSellerByItem = {};
-        if (!window.__rfCaptureStats) window.__rfCaptureStats = { f: 0, x: 0 };
+        if (!window.__rfCaptureStats) window.__rfCaptureStats = { f: 0, x: 0, fall: 0, xall: 0, inst: false };
+        window.__rfCaptureStats.inst = true;
         var origFetch = window.fetch;
         if (origFetch && !origFetch.__rfWrapped) {
           var wrappedFetch = function (input, init) {
             var p = origFetch.apply(this, arguments);
             try {
+              window.__rfCaptureStats.fall++;
               var url = '';
               if (typeof input === 'string') url = input;
               else if (input && input.url) url = input.url;
-              if (url.indexOf('graphql') >= 0) {
-                p.then(function (res) {
-                  try {
-                    var clone = res.clone();
-                    clone.text().then(function (text) {
-                      try {
-                        window.__rfCaptureStats.f++;
-                      } catch (e) {}
-                      __rfTryCapture(text, url);
-                    }).catch(function () {});
-                  } catch (e) {}
-                }).catch(function () {});
-              }
+              p.then(function (res) {
+                try {
+                  var ct = '';
+                  try { ct = res.headers ? (res.headers.get('content-type') || '') : ''; } catch (e) {}
+                  if (!__rfIsDataResponse(url, ct)) return;
+                  var clone = res.clone();
+                  clone.text().then(function (text) {
+                    try {
+                      window.__rfCaptureStats.f++;
+                    } catch (e) {}
+                    __rfTryCapture(text, url);
+                  }).catch(function () {});
+                } catch (e) {}
+              }).catch(function () {});
             } catch (e) {}
             return p;
           };
@@ -122,10 +138,13 @@ export const MESSENGER_JS = `
           XHRProto.send = function () {
             var xhr = this;
             try {
+              window.__rfCaptureStats.xall++;
               xhr.addEventListener('load', function () {
                 try {
                   var url = xhr.__rfUrl || '';
-                  if (url.indexOf('graphql') < 0) return;
+                  var ct = '';
+                  try { ct = xhr.getResponseHeader('Content-Type') || ''; } catch (e) {}
+                  if (!__rfIsDataResponse(url, ct)) return;
                   var text = xhr.responseText || '';
                   try {
                     window.__rfCaptureStats.x++;
@@ -145,8 +164,12 @@ export const MESSENGER_JS = `
   // Diagnostic for the network capture, for the MPA panel on
   // item pages: the seller id for the current item from the
   // captured item→seller map, how many listings the map holds,
-  // and how many GraphQL fetch (f) and XHR (x) responses were
-  // processed — so a miss shows whether any data was seen at all.
+  // and the traffic counters — all fetch (fall) and XHR (xall)
+  // calls the wrappers saw, and how many data responses were
+  // parsed (f/x) — plus whether the wrappers installed (inst).
+  // A miss with fall=0 xall=0 means the wrappers never saw any
+  // traffic; fall>0 with f=0 means the data is not coming
+  // through a data response at all.
   function __rfCaptureDiag() {
     try {
       var map = window.__rfSellerByItem || {};
@@ -156,8 +179,11 @@ export const MESSENGER_JS = `
       var id = cur ? map[cur] : null;
       var count = 0;
       for (var k in map) if (map.hasOwnProperty(k)) count++;
-      var st = window.__rfCaptureStats || { f: 0, x: 0 };
-      return (id || 'none') + ' map=' + count + ' f=' + (st.f || 0) + ' x=' + (st.x || 0);
+      var st = window.__rfCaptureStats || {};
+      return (id || 'none') + ' map=' + count +
+        ' f=' + (st.f || 0) + ' x=' + (st.x || 0) +
+        ' fall=' + (st.fall || 0) + ' xall=' + (st.xall || 0) +
+        ' inst=' + (st.inst ? 'yes' : 'no');
     } catch (e) { return 'captureDiag error'; }
   }
   // Extract a Messenger user (numeric id or username) from a
