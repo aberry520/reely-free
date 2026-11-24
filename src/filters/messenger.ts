@@ -41,13 +41,46 @@ export const MESSENGER_JS = `
         var id = u.searchParams.get('id');
         if (id && /^\\d+$/.test(id)) return id;
       }
+      // /people/<slug>/<id>
+      m = p.match(/^\\/people\\/[^/]+\\/(\\d+)/);
+      if (m) return m[1];
+      return null;
+    } catch (e) { return null; }
+  }
+  // Find the Message/Send control a tap landed on. Facebook's
+  // mobile listing buttons are not always a <button> or an
+  // anchor — the bottom-row Message button can be a plain div —
+  // so closest('a, button, [role="button"]') misses it. Walk up
+  // from the tap target instead: the innermost element whose
+  // whole trimmed text is exactly Message or Send (or starts
+  // with it, e.g. a badge) is the button. The message input
+  // itself never matches — its text is empty and its ancestors
+  // hold the whole composer text.
+  function __rfFindMsgControl(t) {
+    try {
+      var el = t;
+      var guard = 0;
+      while (el && guard < 8) {
+        guard++;
+        if (!el || el.nodeType !== 1) { el = el ? el.parentElement : null; continue; }
+        var txt = (el.textContent || '').trim().toLowerCase();
+        if (txt === 'message' || txt === 'send' ||
+            txt.indexOf('message ') === 0 || txt.indexOf('send ') === 0) {
+          return el;
+        }
+        el = el.parentElement;
+      }
       return null;
     } catch (e) { return null; }
   }
   // Find the seller's profile identifier on a Marketplace item
-  // page. Prefers a numeric profile.php link (the seller's name /
-  // avatar), then a username link near the "Seller details" text.
-  // Returns the user string or null.
+  // page. Tries, in order: a numeric profile.php link, a
+  // /people/<slug>/<id> link, a username link inside the
+  // "Seller information" area. Returns the user string or null.
+  // (His video, 2026-11-24: seller=none on the seats listing,
+  // so the plain profile.php search found nothing — the seller's
+  // link is a username or /people/ path, or the name is not a
+  // link at all.)
   function __rfMessengerFindSeller() {
     try {
       var anchors = document.querySelectorAll('a[href]');
@@ -55,6 +88,11 @@ export const MESSENGER_JS = `
       for (i = 0; i < anchors.length; i++) {
         href = anchors[i].getAttribute('href') || '';
         m = href.match(/profile\\.php\\?id=(\\d+)/);
+        if (m) return m[1];
+      }
+      for (i = 0; i < anchors.length; i++) {
+        href = anchors[i].getAttribute('href') || '';
+        m = href.match(/\\/people\\/[^/]+\\/(\\d+)/);
         if (m) return m[1];
       }
       // Username link near the seller area: climb from a node
@@ -77,6 +115,36 @@ export const MESSENGER_JS = `
       }
       return null;
     } catch (e) { return null; }
+  }
+  // Diagnostic for the seller lookup (reported in the MPA panel
+  // on item pages): how many profile.php / /people/ links exist,
+  // and the first single-segment link inside the seller area.
+  function __rfSellerDiag() {
+    try {
+      var anchors = document.querySelectorAll('a[href]');
+      var prof = 0, ppl = 0, firstUser = 'none';
+      for (var i = 0; i < anchors.length; i++) {
+        var href = anchors[i].getAttribute('href') || '';
+        if (/profile\\.php\\?id=\\d+/.test(href)) prof++;
+        if (/\\/people\\/[^/]+\\/\\d+/.test(href)) ppl++;
+      }
+      var all = document.querySelectorAll('div, section, article');
+      outer:
+      for (i = 0; i < all.length; i++) {
+        var txt = (all[i].textContent || '');
+        if (txt.indexOf('Seller details') < 0 &&
+            txt.indexOf('Seller information') < 0) continue;
+        var links = all[i].querySelectorAll('a[href]');
+        for (var j = 0; j < links.length; j++) {
+          var path = (links[j].getAttribute('href') || '').split('?')[0].replace(/^\\/+/, '').replace(/\\/+$/, '');
+          if (!path || path.indexOf('/') >= 0) continue;
+          if (/^(marketplace|messages|messenger|groups|events|watch|reel|saved|notifications|profile\\.php)$/.test(path)) continue;
+          firstUser = decodeURIComponent(path);
+          break outer;
+        }
+      }
+      return 'prof=' + prof + ' ppl=' + ppl + ' user=' + firstUser;
+    } catch (e) { return 'sellerDiag error'; }
   }
   // Post a Messenger open request to the app. user may be null
   // (opens the Messenger inbox as a fallback).

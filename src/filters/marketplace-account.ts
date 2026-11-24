@@ -208,20 +208,17 @@ ${MESSENGER_JS}
           if (!isFb()) return;
           if (location.pathname.indexOf('/marketplace/item/') !== 0) return;
           var t = ev.target;
-          var ctrl = t && t.closest
-            ? t.closest('a, button, [role="button"], [role="menuitem"]')
-            : null;
-          if (!ctrl) return;
+          // The control: an anchor with a messages href, or the
+          // Message/Send button found by walking up from the tap
+          // (the bottom-row Message button can be a plain div, so
+          // closest('a, button, [role="button"]') misses it — his
+          // video, 2026-11-24: the prompt still fired on a tap).
           var user = null;
-          var href = ctrl.getAttribute && ctrl.getAttribute('href');
-          if (href) user = __rfMessengerUserFromHref(href);
+          var a = t && t.closest ? t.closest('a[href]') : null;
+          if (a) user = __rfMessengerUserFromHref(a.getAttribute('href'));
           if (!user) {
-            var label = ((ctrl.getAttribute && ctrl.getAttribute('aria-label')) || '').trim().toLowerCase();
-            var text = (ctrl.textContent || '').trim().toLowerCase();
-            var isMsg = label === 'message' || text === 'message' ||
-              label === 'send' || text === 'send' ||
-              label.indexOf('message ') === 0 || text.indexOf('message ') === 0;
-            if (!isMsg) return;
+            var ctrl = __rfFindMsgControl(t);
+            if (!ctrl) return;
             user = __rfMessengerFindSeller();
           }
           ev.preventDefault();
@@ -476,19 +473,20 @@ ${MESSENGER_JS}
     try {
       var cover = !!document.getElementById('rf-mpa-cover');
       var viewer = !!document.querySelector('[data-rf-viewer]');
-      var seller = '';
-      if (location.pathname.indexOf('/marketplace/item/') === 0) {
-        var found = __rfMessengerFindSeller();
-        seller = ' seller=' + (found || 'none');
-      }
-      return [
+      var lines = [
         'MPA path=' + (location.pathname || ''),
         'stay=' + (S.stay ? 'YES' : 'NO') +
           ' overlay=' + (mpaOverlayOpen() ? 'YES' : 'NO') +
           ' feed=' + (isFacebookFeed() ? 'YES' : 'NO'),
         'cover=' + (cover ? 'YES' : 'NO') +
-          ' viewer=' + (viewer ? 'YES' : 'NO') + seller,
+          ' viewer=' + (viewer ? 'YES' : 'NO'),
       ];
+      if (location.pathname.indexOf('/marketplace/item/') === 0) {
+        var found = __rfMessengerFindSeller();
+        lines[2] += ' seller=' + (found || 'none');
+        lines.push('sellerLinks: ' + __rfSellerDiag());
+      }
+      return lines;
     } catch (e) { return ['MPA diag error']; }
   }
   function apply() {
