@@ -2,6 +2,7 @@ import type { FilterSettings } from '../lib/settings';
 import { LOGO_MARK_DATA_URI } from './logo-data';
 import { PHOTO_VIEWER_JS } from './photo-viewer';
 import { DIAG_JS } from './diag';
+import { MESSENGER_JS } from './messenger';
 
 // Builds the JavaScript injected into facebook.com before page
 // content loads, for the Marketplace door WITH his account
@@ -60,6 +61,7 @@ export function buildMarketplaceAccountScript(
     blockAppPromo: settings.mpaBlockAppPromo,
     brandHeader: settings.mpaBrandHeader,
     diagnostics: settings.diagnosticsEnabled,
+    openMessenger: settings.mpaOpenMessenger,
   });
   const logo = JSON.stringify(LOGO_MARK_DATA_URI);
 
@@ -70,6 +72,7 @@ export function buildMarketplaceAccountScript(
   var HOME = 'https://www.facebook.com/marketplace';
   var LOGO_SRC = ${logo};
 ${DIAG_JS}
+${MESSENGER_JS}
   function isFb() {
     return /(^|\\.)facebook\\.com$/.test(location.hostname);
   }
@@ -187,6 +190,47 @@ ${DIAG_JS}
         }
       } catch (e) {}
     }, true);
+  }
+  // Open the Messenger app on message taps (Austin's ask,
+  // 2026-11-24): on a listing, tapping Message (or Send in the
+  // "Send seller a message" composer) hits Facebook's "Experience
+  // the best of Marketplace on Facebook app" prompt on the mobile
+  // web, which blocks messaging the seller. Instead the tap opens
+  // the Messenger app to that seller. Installed once, independent
+  // of the stay guard above (messaging should open Messenger even
+  // with Stay off). The pre-filled composer text does NOT carry
+  // over — Messenger has no deep link that pre-fills a message —
+  // so he types it in Messenger.
+  if (S.openMessenger) {
+    try {
+      document.addEventListener('click', function (ev) {
+        try {
+          if (!isFb()) return;
+          if (location.pathname.indexOf('/marketplace/item/') !== 0) return;
+          var t = ev.target;
+          var ctrl = t && t.closest
+            ? t.closest('a, button, [role="button"], [role="menuitem"]')
+            : null;
+          if (!ctrl) return;
+          var user = null;
+          var href = ctrl.getAttribute && ctrl.getAttribute('href');
+          if (href) user = __rfMessengerUserFromHref(href);
+          if (!user) {
+            var label = ((ctrl.getAttribute && ctrl.getAttribute('aria-label')) || '').trim().toLowerCase();
+            var text = (ctrl.textContent || '').trim().toLowerCase();
+            var isMsg = label === 'message' || text === 'message' ||
+              label === 'send' || text === 'send' ||
+              label.indexOf('message ') === 0 || text.indexOf('message ') === 0;
+            if (!isMsg) return;
+            user = __rfMessengerFindSeller();
+          }
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+          __rfMessengerPost(user);
+        } catch (e) {}
+      }, true);
+    } catch (e) {}
   }
   // The 'Open app' bar: ported from the Facebook door's filter.
   // Find the innermost element carrying one of the known labels
@@ -432,13 +476,18 @@ ${DIAG_JS}
     try {
       var cover = !!document.getElementById('rf-mpa-cover');
       var viewer = !!document.querySelector('[data-rf-viewer]');
+      var seller = '';
+      if (location.pathname.indexOf('/marketplace/item/') === 0) {
+        var found = __rfMessengerFindSeller();
+        seller = ' seller=' + (found || 'none');
+      }
       return [
         'MPA path=' + (location.pathname || ''),
         'stay=' + (S.stay ? 'YES' : 'NO') +
           ' overlay=' + (mpaOverlayOpen() ? 'YES' : 'NO') +
           ' feed=' + (isFacebookFeed() ? 'YES' : 'NO'),
         'cover=' + (cover ? 'YES' : 'NO') +
-          ' viewer=' + (viewer ? 'YES' : 'NO'),
+          ' viewer=' + (viewer ? 'YES' : 'NO') + seller,
       ];
     } catch (e) { return ['MPA diag error']; }
   }
