@@ -488,6 +488,7 @@ ${MESSENGER_JS}
         lines.push('sellerArea: ' + __rfSellerAreaHrefs());
         lines.push('buttons: ' + __rfMsgButtonDiag());
         lines.push('fiber: ' + __rfFiberDiag());
+        lines.push('capture: ' + __rfCaptureDiag());
       }
       return lines;
     } catch (e) { return ['MPA diag error']; }
