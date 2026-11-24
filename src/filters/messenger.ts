@@ -456,7 +456,21 @@ export const MESSENGER_JS = `
   // "owner" object carrying an "id". Returns the id string or
   // null. Cached per item page — the full-HTML search is expensive
   // and the diagnostic calls this every second.
-  var __rfSellerJsonCache = { path: '', id: null, done: false };
+  var __rfSellerJsonCache = { path: '', id: null, done: false, source: '' };
+  // Search the full page HTML (server-rendered listing data) for
+  // the seller id. The data does NOT travel as a fetch/XHR call
+  // (the capture saw zero network traffic), so the id must live
+  // in the HTML itself. The object patterns are deliberately
+  // lenient — [\\s\\S]{0,3000}? so nested objects and long
+  // seller records do not stop the match — and the key list
+  // covers seller/actor/owner/profile variants plus data
+  // attributes. The first match wins; which pattern matched is
+  // kept in the cache so the panel can show it.
+  // NOTE: every backslash below is DOUBLED in this TS source so
+  // the emitted JS keeps it. A single backslash-d here used to
+  // emit as (d+) and match the letter d instead of digits —
+  // that is why this search reported json=none on every
+  // screenshot before this fix.
   function __rfSellerIdFromJson() {
     try {
       var path = location.pathname || '';
@@ -464,24 +478,41 @@ export const MESSENGER_JS = `
         return __rfSellerJsonCache.id;
       }
       var id = null;
+      var source = '';
       var html = '';
       try { html = document.documentElement ? document.documentElement.innerHTML || '' : ''; } catch (e) {}
       if (html) {
-        var patterns = [
-          /"seller_id"\\s*:\\s*"?(\d+)/,
-          /"sellerID"\\s*:\\s*"?(\d+)/,
-          /"seller_profile_id"\\s*:\\s*"?(\d+)/,
-          /"seller"\\s*:\\s*\{[^}]{0,400}?"id"\\s*:\\s*"?(\d+)/,
-          /"owner"\\s*:\\s*\{[^}]{0,400}?"id"\\s*:\\s*"?(\d+)/,
-          /"profile_id"\\s*:\\s*"?(\d+)/,
-          /"merchant_id"\\s*:\\s*"?(\d+)/
+        var itemId = '';
+        var im = path.match(/\\/marketplace\\/item\\/(\\d+)/);
+        if (im) itemId = im[1];
+        var named = [
+          ['seller_id', /"seller_id"\\s*:\\s*"?(\\d+)/],
+          ['sellerID', /"sellerID"\\s*:\\s*"?(\\d+)/],
+          ['seller_profile_id', /"seller_profile_id"\\s*:\\s*"?(\\d+)/],
+          ['seller-obj', /"seller"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['owner-obj', /"owner"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['actor-obj', /"actor"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['profile-obj', /"profile"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['seller_profile-obj', /"seller_profile"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['author-obj', /"author"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['creator-obj', /"creator"\\s*:\\s*\\{[\\s\\S]{0,3000}?"id"\\s*:\\s*"?(\\d+)/],
+          ['profile_id', /"profile_id"\\s*:\\s*"?(\\d+)/],
+          ['merchant_id', /"merchant_id"\\s*:\\s*"?(\\d+)/],
+          ['actor_id', /"actor_id"\\s*:\\s*"?(\\d+)/],
+          ['data-user-id', /data-user-id\\s*=\\s*"(\\d+)/],
+          ['data-seller-id', /data-seller-id\\s*=\\s*"(\\d+)/],
+          ['data-owner-id', /data-owner-id\\s*=\\s*"(\\d+)/],
+          ['user_id', /"user_id"\\s*:\\s*"?(\\d+)/]
         ];
-        for (var i = 0; i < patterns.length && !id; i++) {
-          var m = html.match(patterns[i]);
-          if (m) id = m[1];
+        for (var i = 0; i < named.length && !id; i++) {
+          var m = html.match(named[i][1]);
+          if (m && m[1] && m[1] !== itemId) {
+            id = m[1];
+            source = named[i][0];
+          }
         }
       }
-      __rfSellerJsonCache = { path: path, id: id, done: true };
+      __rfSellerJsonCache = { path: path, id: id, done: true, source: source };
       return id;
     } catch (e) { return null; }
   }
@@ -574,8 +605,10 @@ export const MESSENGER_JS = `
         }
       }
       var jsonId = __rfSellerIdFromJson();
+      var jsonSrc = '';
+      try { jsonSrc = __rfSellerJsonCache.source || ''; } catch (e) {}
       return 'prof=' + prof + ' ppl=' + ppl + ' mp=' + mp +
-        ' json=' + (jsonId || 'none') + ' user=' + firstUser;
+        ' json=' + (jsonId || 'none') + (jsonId && jsonSrc ? ' (' + jsonSrc + ')' : '') + ' user=' + firstUser;
     } catch (e) { return 'sellerDiag error'; }
   }
   // Post a Messenger open request to the app. user may be null
