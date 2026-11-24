@@ -9,18 +9,29 @@ import { PHOTO_VIEWER_JS } from './photo-viewer';
 // Facebook is ignored. The door opens on Marketplace and stays
 // there:
 //
-//  - A route guard runs on load and on a loop: any facebook.com
-//    page outside the allowed set is replaced with Marketplace
-//    home. That covers redirects (Facebook loves sending you to
-//    the feed after login) and JS-driven navigation the tap guard
-//    can't see.
-//  - A capture-phase tap guard swallows taps on links that would
-//    leave the allowed set, so the top nav (Home, Watch, groups,
+//  - A route guard runs on load and on a loop: a facebook.com
+//    page on the block list is replaced with Marketplace home.
+//    That covers redirects (Facebook loves sending you to the
+//    feed after login) and JS-driven navigation the tap guard
+//    can't see. The guard is a DENYLIST, not an allowlist
+//    (Austin, 2026-11-23): it only targets the established
+//    rabbit holes — the feed, Watch, Reels, groups, and the rest
+//    of the Facebook chrome — plus login prompts. Everything
+//    else, including any Marketplace popup or overlay Facebook
+//    routes through an unexpected path, is left alone. The
+//    allowlist kept breaking legitimate Marketplace features,
+//    and that was the annoyance.
+//  - A capture-phase tap guard swallows taps on links to a
+//    blocked page, so the top nav (Home, Watch, groups,
 //    profile) simply does nothing instead of bouncing him around.
-//  - Allowed: Marketplace itself, the sign-in flow (/login,
-//    /checkpoint, /recover, two-step — without those he could
-//    never log in), and, behind its own toggle, message threads
-//    (/messages, /messenger paths) for talking to buyers/sellers.
+//  - Blocked: the home feed (/), Watch, Reels, groups,
+//    notifications, gaming, videos, events, stories, saved,
+//    memories, profile, friends, pages. Allowed, and never
+//    policed: Marketplace itself, the photo viewer, the sign-in
+//    flow (/login, /checkpoint, /recover, two-step — without
+//    those he could never log in), and, behind its own toggle,
+//    message threads (/messages, /messenger paths) for talking
+//    to buyers/sellers.
 //  - Other hosts (e.g. messenger.com) are left alone entirely —
 //    the guard only polices facebook.com.
 //  - The 'Open app' footer bar is hidden with the same rule the
@@ -59,23 +70,28 @@ export function buildMarketplaceAccountScript(
   function isFb() {
     return /(^|\\.)facebook\\.com$/.test(location.hostname);
   }
-  function allowed(path) {
-    if (path.indexOf('/marketplace') === 0) return true;
-    // Photo viewer (Austin's report, 2026-11-23): tapping a
-    // listing photo opens the viewer at /photo.php (mobile) or
-    // /photo/ — the guard didn't allow it, so it bounced the
-    // viewer back to the feed (his video: viewer opens, Facebook
-    // splash, feed). Viewing a listing's photos is part of
-    // Marketplace, so the viewer routes stay allowed.
-    if (path.indexOf('/photo') === 0) return true;
-    if (path.indexOf('/login') === 0) return true;
-    if (path.indexOf('/checkpoint') === 0) return true;
-    if (path.indexOf('/recover') === 0) return true;
-    if (path.indexOf('/two_step_verification') === 0) return true;
-    if (S.allowMessages) {
-      if (path.indexOf('/messages') === 0) return true;
-      if (path.indexOf('/messenger') === 0) return true;
-    }
+  // Denylist (Austin, 2026-11-23): only these paths get bounced.
+  // Everything else — Marketplace itself, the photo viewer, the
+  // sign-in flow, messages, search, settings, and any popup or
+  // overlay Facebook routes through an unexpected path — is left
+  // alone. The old allowlist bounced legitimate Marketplace
+  // features (location, search, categories all route through
+  // "/"), which was the annoyance.
+  function blocked(path) {
+    if (path === '/' || path === '') return true;
+    if (path.indexOf('/watch') === 0) return true;
+    if (path.indexOf('/reel') === 0) return true;
+    if (path.indexOf('/groups') === 0) return true;
+    if (path.indexOf('/notifications') === 0) return true;
+    if (path.indexOf('/gaming') === 0) return true;
+    if (path.indexOf('/videos') === 0) return true;
+    if (path.indexOf('/events') === 0) return true;
+    if (path.indexOf('/stories') === 0) return true;
+    if (path.indexOf('/saved') === 0) return true;
+    if (path.indexOf('/memories') === 0) return true;
+    if (path.indexOf('/profile.php') === 0) return true;
+    if (path.indexOf('/friends') === 0) return true;
+    if (path.indexOf('/pages') === 0) return true;
     return false;
   }
   if (S.stay) {
@@ -110,7 +126,7 @@ export function buildMarketplaceAccountScript(
     }
     function guard() {
       try {
-        if (isFb() && !allowed(location.pathname) && !mpaOverlayOpen()) {
+        if (isFb() && blocked(location.pathname) && !mpaOverlayOpen()) {
           location.replace(HOME);
         }
       } catch (e) {}
@@ -128,7 +144,7 @@ export function buildMarketplaceAccountScript(
         var u;
         try { u = new URL(href, location.origin); } catch (e) { return; }
         if (u.origin !== location.origin) return;
-        if (!allowed(u.pathname)) {
+        if (blocked(u.pathname)) {
           ev.preventDefault();
           ev.stopPropagation();
         }
