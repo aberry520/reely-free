@@ -124,11 +124,45 @@ export function buildMarketplaceAccountScript(
         return false;
       } catch (e) { return false; }
     }
+    // The home feed, for the "/" bounce: Facebook routes
+    // Marketplace overlays — and their sub-pickers, like the
+    // location search and the radius list — through "/" too, so
+    // the guard can't bounce "/" by path alone. It has to confirm
+    // the page is actually the feed. The feed's composer and
+    // stories are the tell; overlays and sub-pickers have neither.
+    function isFacebookFeed() {
+      try {
+        if (!document.body) return false;
+        var markers = ["What's on your mind?", 'Stories'];
+        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+        var node;
+        while ((node = walker.nextNode())) {
+          var v = node.nodeValue || '';
+          for (var i = 0; i < markers.length; i++) {
+            if (v.indexOf(markers[i]) !== -1) {
+              var el = node.parentElement;
+              if (el) {
+                var r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) return true;
+              }
+            }
+          }
+        }
+        return false;
+      } catch (e) { return false; }
+    }
     function guard() {
       try {
-        if (isFb() && blocked(location.pathname) && !mpaOverlayOpen()) {
-          location.replace(HOME);
+        if (!isFb() || !blocked(location.pathname)) return;
+        var p = location.pathname;
+        if (p === '/' || p === '') {
+          // "/" is both the feed and the route Marketplace
+          // overlays (and their sub-pickers) use — only bounce
+          // when it's actually the feed, and no Marketplace
+          // overlay is open.
+          if (!isFacebookFeed() || mpaOverlayOpen()) return;
         }
+        location.replace(HOME);
       } catch (e) {}
     }
     guard();
