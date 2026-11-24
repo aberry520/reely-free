@@ -395,7 +395,7 @@ export default function SettingsScreen() {
               />
               <ToggleRow
                 label="Reely Free header"
-                detail="A slim Reely Free strip — the logo with 'Reely' and 'Free' either side — sits at the very top of the page, above Facebook's tab bar. The tabs and everything else keep working."
+                detail="The Reely Free mark sits in the top bar, between the Facebook logo and the search button. The tabs and everything else keep working."
                 value={settings.fbBrandHeader}
                 onChange={set('fbBrandHeader')}
               />

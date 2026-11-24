@@ -159,20 +159,23 @@ export function buildFacebookScript(settings: FilterSettings): string {
   // an oversized "unit" is simply left alone.
   // The section header ROW (icon + "Reels" + menu): climb from
   // the text to the first full-width, row-tall ancestor.
-  // Branded header strip (Austin's ask, 2026-11-23): a slim
-  // Reely Free strip — "Reely" + mark + "Free" — inserted as an
-  // in-flow row immediately BEFORE the nav tablist, so it sits at
-  // the very top of the page and scrolls away with it while the
-  // sticky tab bar keeps sticking underneath. Nothing is hidden
-  // or covered, so every control in the header keeps working.
+  // Branded header (Austin's ask, 2026-11-23, placement refined
+  // the same day): the Reely Free mark sits IN the header's top
+  // row — centered between the "facebook" wordmark and the search
+  // icon — instead of its own row above the tab bar. The brand is
+  // absolutely centered inside the row with pointer-events:none,
+  // so it can never cover a tap target or move the row's own
+  // controls, and it shrinks to the free gap on narrow phones.
+  // If the row can't be found, the old full-width strip above the
+  // tab bar is the fallback, so the brand never disappears.
   // (The Marketplace door instead covers its disposable nav —
   // here the tabs ARE the navigation, so a cover would break
   // the door.)
   function brandHeaderStrip() {
     try {
       if (!S.brandHeader) return;
-      var strip = document.getElementById('rf-fb-strip');
-      if (strip && strip.isConnected) return;
+      var brand = document.getElementById('rf-fb-brand');
+      if (brand && brand.isConnected) return;
       var lists = document.querySelectorAll('[role="tablist"]');
       var bar = null;
       for (var i = 0; i < lists.length; i++) {
@@ -190,14 +193,101 @@ export function buildFacebookScript(settings: FilterSettings): string {
         if (positioned >= 2) { bar = list; break; }
       }
       if (!bar || !bar.parentElement) return;
+      // The header row: the sibling directly above the tab bar,
+      // holding the facebook wordmark and the search control.
+      var row = null;
+      var sib = bar.previousElementSibling;
+      var guard = 0;
+      while (sib && guard < 3) {
+        guard++;
+        var rr = sib.getBoundingClientRect();
+        var br = bar.getBoundingClientRect();
+        var hasSearch = !!(sib.querySelector &&
+          sib.querySelector('[aria-label*="Search"], [aria-label*="search"]'));
+        var hasFb = /facebook/i.test(sib.textContent || '') ||
+          !!(sib.querySelector && sib.querySelector(
+            'img[alt*="Facebook"], [aria-label*="Facebook"]'));
+        if (rr.height >= 28 && rr.height <= 90 &&
+            rr.width >= window.innerWidth * 0.9 &&
+            Math.abs(rr.bottom - br.top) <= 12 &&
+            (hasSearch || hasFb)) { row = sib; break; }
+        sib = sib.previousElementSibling;
+      }
+      if (row) {
+        // The old full-width strip goes away if it's still around.
+        var old = document.getElementById('rf-fb-strip');
+        if (old) old.remove();
+        var cs = null;
+        try { cs = getComputedStyle(row); } catch (e) {}
+        if (cs && cs.position === 'static') {
+          row.style.setProperty('position', 'relative', 'important');
+        }
+        var fg = '';
+        try { fg = getComputedStyle(document.body).color; } catch (e) {}
+        brand = document.createElement('span');
+        brand.id = 'rf-fb-brand';
+        brand.style.cssText =
+          'position:absolute;left:50%;top:50%;' +
+          'transform:translate(-50%,-50%);' +
+          'display:flex;align-items:center;gap:6px;' +
+          'font-weight:800;font-size:13px;letter-spacing:0.2px;' +
+          'color:' + (fg || '#111111') + ';pointer-events:none;' +
+          'white-space:nowrap;z-index:1;';
+        var left = document.createElement('span');
+        left.textContent = 'Reely';
+        var img = document.createElement('img');
+        img.src = MARK;
+        img.style.cssText =
+          'height:18px;width:18px;border-radius:5px;display:block;';
+        var right = document.createElement('span');
+        right.textContent = 'Free';
+        brand.appendChild(left);
+        brand.appendChild(img);
+        brand.appendChild(right);
+        row.appendChild(brand);
+        // Shrink to the free gap if the row is crowded (narrow
+        // phones): measure once and scale the font/mark down.
+        try {
+          var bw = brand.getBoundingClientRect().width;
+          var rw = row.getBoundingClientRect();
+          var kids = row.children;
+          var leftEdge = rw.left, rightEdge = rw.right;
+          for (var k = 0; k < kids.length; k++) {
+            var kid = kids[k];
+            if (kid === brand) continue;
+            var kr = kid.getBoundingClientRect();
+            var mid = kr.left + kr.width / 2;
+            if (mid < rw.left + rw.width / 2 && kr.right > leftEdge) {
+              leftEdge = kr.right;
+            }
+            if (mid >= rw.left + rw.width / 2 && kr.left < rightEdge) {
+              rightEdge = kr.left;
+            }
+          }
+          var gap = rightEdge - leftEdge;
+          if (bw > gap && gap > 40) {
+            var scale = Math.max(0.6, gap / bw);
+            brand.style.setProperty(
+              'font-size', (13 * scale).toFixed(1) + 'px', 'important');
+            img.style.setProperty(
+              'height', (18 * scale).toFixed(1) + 'px', 'important');
+            img.style.setProperty(
+              'width', (18 * scale).toFixed(1) + 'px', 'important');
+          }
+        } catch (e) {}
+        return;
+      }
+      // Fallback: the full-width strip above the tab bar.
+      var strip = document.getElementById('rf-fb-strip');
+      if (strip && strip.isConnected) return;
       strip = document.createElement('div');
       strip.id = 'rf-fb-strip';
       var bg = '';
-      var fg = '';
+      var fg2 = '';
       try {
         var bs = getComputedStyle(document.body);
         bg = bs.backgroundColor;
-        fg = bs.color;
+        fg2 = bs.color;
       } catch (e) {}
       if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') {
         bg = '#ffffff';
@@ -205,20 +295,20 @@ export function buildFacebookScript(settings: FilterSettings): string {
       strip.style.cssText =
         'display:flex;align-items:center;justify-content:center;gap:8px;' +
         'height:30px;box-sizing:border-box;flex:none;' +
-        'background:' + bg + ';color:' + (fg || '#111111') + ';' +
+        'background:' + bg + ';color:' + (fg2 || '#111111') + ';' +
         'font-weight:800;font-size:15px;letter-spacing:0.2px;' +
         'border-bottom:1px solid rgba(128,128,128,0.35);';
-      var left = document.createElement('span');
-      left.textContent = 'Reely';
-      var img = document.createElement('img');
-      img.src = MARK;
-      img.style.cssText =
+      var left2 = document.createElement('span');
+      left2.textContent = 'Reely';
+      var img2 = document.createElement('img');
+      img2.src = MARK;
+      img2.style.cssText =
         'height:22px;width:22px;border-radius:6px;display:block;';
-      var right = document.createElement('span');
-      right.textContent = 'Free';
-      strip.appendChild(left);
-      strip.appendChild(img);
-      strip.appendChild(right);
+      var right2 = document.createElement('span');
+      right2.textContent = 'Free';
+      strip.appendChild(left2);
+      strip.appendChild(img2);
+      strip.appendChild(right2);
       bar.parentElement.insertBefore(strip, bar);
     } catch (e) {}
   }
