@@ -36,6 +36,14 @@ export function buildMarketplaceGuestScript(
 (function () {
   var S = ${s};
   var MARK = ${mark};
+  // Photo viewer: installed whenever the door itself is enabled,
+  // independent of the sub-toggles below — viewing a listing's
+  // photos is core door behavior, and the desktop photo is a
+  // link to the item page itself, so without our viewer tapping
+  // it does nothing at all. (The declaration is interpolated at
+  // the end of this script; function declarations hoist, so this
+  // call runs first.)
+  if (S.enabled) installPhotoViewer();
   if (!S.enabled || (!S.dismissLogin && !S.blockLoginBar && !S.nativeShare && !S.brandHeader)) { true; return; }
   // Native share (Austin's ask, 2026-11-23): Facebook's own share
   // flow is useless logged out — its dialog wants an account. So a
@@ -653,9 +661,9 @@ export function buildMarketplaceGuestScript(
   setInterval(apply, 2500);
   // Photo viewer (our own — Facebook's is a no-op on this door):
   // tapping a listing photo opens the overlay, with close,
-  // prev/next and swipe, and Back closes it.
+  // prev/next and swipe. Installed near the top of this script,
+  // whenever the door is enabled.
   ${PHOTO_VIEWER_JS}
-  installPhotoViewer();
   true;
 })();
 `;

@@ -78,98 +78,10 @@ export function buildMarketplaceAccountScript(
     }
     return false;
   }
-  // TEMPORARY diagnostic (2026-11-23): the photo viewer still
-  // bounces to the feed even with /photo allowed, so the viewer
-  // route is something else. This records the path history (kept
-  // in sessionStorage so it survives the bounce) and whether the
-  // stay-guard fired, and shows it in a small panel. It comes out
-  // in the same commit as the fix it informs. The panel is
-  // pointer-events:none, so it can never eat a tap itself.
-  function diagRecord(path, note) {
-    try {
-      var raw = sessionStorage.getItem('rf-mpa-diag');
-      var d = raw ? JSON.parse(raw) : { paths: [], guard: '' };
-      var entry = new Date().toTimeString().slice(0, 8) + ' ' + path +
-        (note ? ' ' + note : '');
-      if (d.paths[d.paths.length - 1] !== entry) d.paths.push(entry);
-      while (d.paths.length > 4) d.paths.shift();
-      if (note && note.indexOf('GUARD') === 0) d.guard = entry;
-      sessionStorage.setItem('rf-mpa-diag', JSON.stringify(d));
-    } catch (e) {}
-  }
-  function diagPanel() {
-    try {
-      var panel = document.getElementById('rf-mpa-diag');
-      if (!panel) {
-        panel = document.createElement('div');
-        panel.id = 'rf-mpa-diag';
-        panel.style.cssText =
-          'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;' +
-          'background:rgba(0,0,0,0.88);color:#fff;' +
-          'font:11px/1.5 monospace;white-space:pre-wrap;' +
-          'padding:6px 8px;pointer-events:none;';
-        (document.body || document.documentElement).appendChild(panel);
-      }
-      var raw = sessionStorage.getItem('rf-mpa-diag');
-      var d = raw ? JSON.parse(raw) : { paths: [], guard: '' };
-      panel.textContent =
-        'DIAG-MPA tap: ' + (d.tap || 'none yet') + '\\n' +
-        'path: ' + location.pathname + '\\n' +
-        'history:\\n' + (d.paths.join('\\n') || '(none)') + '\\n' +
-        'guard: ' + (d.guard || 'never fired');
-    } catch (e) {}
-  }
-  // Record the last tap into the same sessionStorage record, so a
-  // bounce can't erase what the tap actually hit. Records only —
-  // it never prevents or stops anything.
-  document.addEventListener('click', function (ev) {
-    try {
-      var t = ev.target;
-      var tag = t && t.tagName ? t.tagName.toLowerCase() : '?';
-      var cls = '';
-      try {
-        cls = (t && t.className && t.className.toString
-          ? t.className.toString() : '').slice(0, 30);
-      } catch (e) {}
-      var a = t && t.closest ? t.closest('a[href]') : null;
-      var href = a ? (a.getAttribute('href') || '').slice(0, 50) : '-';
-      var isImg = !!(t && t.tagName === 'IMG');
-      var hasBg = false;
-      var g = 0, bgEl = (t && t.nodeType === 1) ? t : null;
-      while (bgEl && g < 3) {
-        g++;
-        var bg = '';
-        try { bg = getComputedStyle(bgEl).backgroundImage || ''; } catch (e) {}
-        if (bg.indexOf('url(') >= 0) { hasBg = true; break; }
-        bgEl = bgEl.parentElement;
-      }
-      var y = 0, w = 0;
-      try {
-        var r = t.getBoundingClientRect();
-        y = Math.round(r.top + (window.scrollY || 0));
-        w = Math.round(Math.max(r.width, r.height));
-      } catch (e) {}
-      var raw = sessionStorage.getItem('rf-mpa-diag');
-      var d = raw ? JSON.parse(raw) : { paths: [], guard: '' };
-      d.tap = tag + '.' + cls + ' href=' + href +
-        ' img=' + (isImg ? 'y' : 'n') + ' bg=' + (hasBg ? 'y' : 'n') +
-        ' y=' + y + ' size=' + w;
-      sessionStorage.setItem('rf-mpa-diag', JSON.stringify(d));
-      diagPanel();
-    } catch (e) {}
-  }, true);
   if (S.stay) {
-    var lastPath = '';
     function guard() {
       try {
-        if (location.pathname !== lastPath) {
-          lastPath = location.pathname;
-          diagRecord(lastPath);
-        }
-        diagPanel();
         if (isFb() && !allowed(location.pathname)) {
-          diagRecord(location.pathname, 'GUARD fired');
-          diagPanel();
           location.replace(HOME);
         }
       } catch (e) {}
