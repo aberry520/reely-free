@@ -134,15 +134,28 @@ export const MESSENGER_JS = `
       // anywhere in the full HTML, Message/Send are plain divs),
       // so it lives in React state. Walk the fiber from the
       // Message button and read it out of the component props.
+      // (The avatar-URL fallback is deliberately NOT here: on
+      // the fragrance-oils listing it fired a CDN photo id,
+      // 2067026790682737, which opened a bogus "Facebook User"
+      // thread in Messenger — a photo id is not a user id.)
       var fiberId = __rfSellerIdFromFiber();
       if (fiberId) return fiberId;
-      // Final fallback: a long number in the seller avatar's
-      // image URL (a graph.facebook.com/<id>/picture URL carries
-      // the user id; a CDN photo URL carries a photo id instead —
-      // the panel reports which one fired, so a wrong hit is
-      // visible and removable next round).
-      var avatarId = __rfSellerAvatarId();
-      if (avatarId) return avatarId;
+      return null;
+    } catch (e) { return null; }
+  }
+  // Find the Message button element itself by searching DOWN
+  // the DOM: the first element whose whole trimmed text is
+  // exactly "Message". (The tap-time helper __rfFindMsgControl
+  // walks UP from a tap target and must not be used here — called
+  // with document.body it walks up past the page and finds
+  // nothing, which is why the fiber walk silently never ran.)
+  function __rfFindMsgButton() {
+    try {
+      var els = document.querySelectorAll('a, button, [role="button"], div, span');
+      for (var i = 0; i < els.length; i++) {
+        var txt = (els[i].textContent || '').trim().toLowerCase();
+        if (txt === 'message') return els[i];
+      }
       return null;
     } catch (e) { return null; }
   }
@@ -202,7 +215,7 @@ export const MESSENGER_JS = `
       if (__rfFiberCache.path === path && __rfFiberCache.id) return __rfFiberCache.id;
       if (__rfFiberCache.path === path && (now - __rfFiberCache.at) < 3000) return null;
       var id = null;
-      var btn = __rfFindMsgControl(document.body);
+      var btn = __rfFindMsgButton();
       if (btn) {
         var key = null;
         var keys = Object.keys(btn);
@@ -230,34 +243,21 @@ export const MESSENGER_JS = `
       return id;
     } catch (e) { return null; }
   }
-  // A long number in the seller avatar's image URL. The avatar
-  // sits in the seller area; a graph.facebook.com/<id>/picture
-  // URL carries the user id directly.
-  function __rfSellerAvatarId() {
-    try {
-      var all = document.querySelectorAll('div, section, article');
-      for (var i = 0; i < all.length; i++) {
-        var txt = (all[i].textContent || '');
-        if (txt.indexOf('Seller details') < 0 &&
-            txt.indexOf('Seller information') < 0) continue;
-        var imgs = all[i].querySelectorAll('img[src]');
-        for (var j = 0; j < imgs.length; j++) {
-          var src = imgs[j].getAttribute('src') || '';
-          var m = src.match(/(\\d{10,})/);
-          if (m) return m[1];
-        }
-        return null;
-      }
-      return null;
-    } catch (e) { return null; }
-  }
-  // Diagnostic for the fiber / avatar seller-id sources, for the
-  // MPA panel on item pages.
+  // Diagnostic for the fiber seller-id source, for the MPA
+  // panel on item pages: whether the Message button carries a
+  // React fiber key, and the id the walk found (if any).
   function __rfFiberDiag() {
     try {
+      var btn = __rfFindMsgButton();
+      if (!btn) return 'nobtn';
+      var key = null;
+      var keys = Object.keys(btn);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].indexOf('__reactFiber$') === 0 ||
+            keys[i].indexOf('__reactInternalInstance$') === 0) { key = keys[i]; break; }
+      }
       var fiberId = __rfSellerIdFromFiber();
-      var avatarId = __rfSellerAvatarId();
-      return 'fiber=' + (fiberId || 'none') + ' avatar=' + (avatarId || 'none');
+      return 'key=' + (key ? 'yes' : 'no') + ' id=' + (fiberId || 'none');
     } catch (e) { return 'fiberDiag error'; }
   }
   // The seller's numeric user id from the page's embedded data.
