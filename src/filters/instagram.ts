@@ -267,16 +267,19 @@ export function buildInstagramScript(settings: FilterSettings): string {
       } catch (e) {}
     }, true);
   } catch (e) {}
-  // Branded header (Austin's ask, 2026-11-23): the Instagram
-  // wordmark in the top bar is swapped for the Reely Free mark.
-  // The link itself is untouched, so tapping it still goes home,
-  // and the heart / messenger icons beside it are untouched.
-  // The bottom nav's home tab is also an a[href="/"], but it sits
-  // near the bottom of the screen, so the top-90px gate excludes it.
+  // Branded header (Austin's ask, 2026-11-23; full lockup
+  // refined the same day): the Instagram wordmark in the top bar
+  // is replaced with the full "Reely [mark] Free" lockup — the
+  // same header the Facebook door shows. The link itself is
+  // untouched, so tapping it still goes home, and the heart /
+  // messenger icons beside it are untouched. The bottom nav's
+  // home tab is also an a[href="/"], but it sits near the bottom
+  // of the screen, so the top-90px gate excludes it.
   function brandHeaderLogo() {
     try {
       if (!S.brandHeader) return;
-      var links = document.querySelectorAll('a[href="/"]');
+      var links = document.querySelectorAll(
+        'a[href="/"], a[aria-label*="Instagram"]');
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
         if (link.getAttribute('data-rf-logo')) continue;
@@ -285,13 +288,35 @@ export function buildInstagramScript(settings: FilterSettings): string {
         if (r.width < 20 || r.width > 220) continue;
         if (r.height < 20 || r.height > 60) continue;
         if (!link.querySelector('svg, img')) continue;
+        var fg = '';
+        try { fg = getComputedStyle(link).color; } catch (e) {}
         while (link.firstChild) link.removeChild(link.firstChild);
+        link.style.display = 'inline-flex';
+        link.style.alignItems = 'center';
+        link.style.gap = '6px';
+        link.style.textDecoration = 'none';
+        link.style.whiteSpace = 'nowrap';
+        link.style.width = 'auto';
+        link.style.flexShrink = '0';
+        if (fg) link.style.color = fg;
+        var left = document.createElement('span');
+        left.textContent = 'Reely';
+        left.style.fontWeight = '800';
+        left.style.fontSize = '14px';
+        left.style.letterSpacing = '0.2px';
         var img = document.createElement('img');
         img.src = MARK;
         img.alt = 'Reely Free';
         img.style.cssText =
-          'height:28px;width:28px;border-radius:7px;display:block;';
+          'height:20px;width:20px;border-radius:5px;display:block;';
+        var right = document.createElement('span');
+        right.textContent = 'Free';
+        right.style.fontWeight = '800';
+        right.style.fontSize = '14px';
+        right.style.letterSpacing = '0.2px';
+        link.appendChild(left);
         link.appendChild(img);
+        link.appendChild(right);
         link.setAttribute('data-rf-logo', '1');
         return;
       }

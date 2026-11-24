@@ -448,7 +448,7 @@ export default function SettingsScreen() {
               />
               <ToggleRow
                 label="Reely Free header"
-                detail="The Instagram wordmark at the top left becomes the Reely Free mark. Tapping it still goes home, and the icons beside it are untouched."
+                detail="The Instagram wordmark at the top left becomes the Reely Free header — 'Reely' and 'Free' around the Reely Free mark. Tapping it still goes home, and the icons beside it are untouched."
                 value={settings.igBrandHeader}
                 onChange={set('igBrandHeader')}
               />
@@ -507,7 +507,7 @@ export default function SettingsScreen() {
               />
               <ToggleRow
                 label="Reely Free header"
-                detail="The YouTube logo at the top left becomes the Reely Free mark. Tapping it still goes home, and search and your avatar stay."
+                detail="The YouTube logo at the top left becomes the Reely Free header — 'Reely' and 'Free' around the Reely Free mark. Tapping it still goes home, and search and your avatar stay."
                 value={settings.ytBrandHeader}
                 onChange={set('ytBrandHeader')}
               />
