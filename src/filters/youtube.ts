@@ -158,6 +158,28 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       (document.body || document.documentElement).appendChild(el);
     } catch (e) {}
   }
+  // The video to PiP — not just the first <video> in the page
+  // (YouTube can have several: ads, previews, a hidden one).
+  // Prefer the one already in PiP, else the largest playing,
+  // visible one. With requirePlaying false, the largest visible
+  // video regardless of play state (used when the button is tapped
+  // after the video was paused).
+  function findPipVideo(requirePlaying) {
+    try {
+      if (document.pictureInPictureElement) return document.pictureInPictureElement;
+      var vids = document.querySelectorAll('video');
+      var best = null, bestArea = 0;
+      for (var i = 0; i < vids.length; i++) {
+        var v = vids[i];
+        if (requirePlaying && (v.paused || v.ended || v.readyState <= 1)) continue;
+        var r = v.getBoundingClientRect();
+        var area = r.width * r.height;
+        if (area <= 0) continue;
+        if (area > bestArea) { bestArea = area; best = v; }
+      }
+      return best;
+    } catch (e) { return null; }
+  }
   // PiP button (Austin, 2026-11-24): YouTube's own PiP button in
   // fullscreen drops PiP immediately — the fullscreen exit
   // re-initializes the player and kills the PiP session — while
@@ -172,7 +194,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     try {
       var btn = document.getElementById('rf-pip-btn');
       var onWatch = (location.pathname || '') === '/watch';
-      var v = document.querySelector('video');
+      var v = findPipVideo(true);
       var inPip = !!document.pictureInPictureElement;
       var playing = !!v && !v.paused && !v.ended && v.readyState > 1;
       var inFs = !!document.fullscreenElement ||
@@ -199,7 +221,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
           ev.preventDefault();
           ev.stopPropagation();
           try {
-            var vid = document.querySelector('video');
+            var vid = findPipVideo(true) || findPipVideo(false);
             if (!vid) return;
             if (document.pictureInPictureElement) {
               document.exitPictureInPicture();
