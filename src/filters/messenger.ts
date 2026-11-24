@@ -33,64 +33,55 @@ export const MESSENGER_JS = `
     try {
       if (__rfSellerCaptureInstalled) return;
       __rfSellerCaptureInstalled = true;
-      // Recursively search a parsed JSON value for the listing's
-      // seller: a seller/owner object with a numeric id, or a
-      // direct seller_id/owner_id prop. Excludes the item id.
-      // Only seller/owner keys (not bare 'user') so a commenter
-      // or the viewer is never mistaken for the seller.
-      function __rfFindSellerInJson(obj, itemId, seen) {
+      // Recursively search a parsed JSON value for listings and
+      // stash each one's seller: an object with a numeric id plus
+      // a seller/owner object carrying a numeric id (or a direct
+      // seller_id/owner_id prop) is a listing, and map[itemId] =
+      // sellerId. Only seller/owner keys (not bare 'user') so a
+      // commenter or the viewer is never mistaken for a seller.
+      function __rfFindListingsInJson(obj, seen, map) {
         try {
-          if (!obj || typeof obj !== 'object') return null;
-          if (seen.indexOf(obj) >= 0) return null;
+          if (!obj || typeof obj !== 'object') return;
+          if (seen.indexOf(obj) >= 0) return;
           seen.push(obj);
-          if (seen.length > 500) return null;
-          var i, k, v;
-          var objKeys = ['seller', 'owner'];
-          for (i = 0; i < objKeys.length; i++) {
-            v = obj[objKeys[i]];
-            if (v && typeof v === 'object' && v.id != null) {
-              var s = String(v.id);
-              if (/^\\d{5,}$/.test(s) && s !== itemId) return s;
+          if (seen.length > 1000) return;
+          var lid = obj.id;
+          if (lid != null && /^\\d{5,}$/.test(String(lid))) {
+            var sObj = obj.seller || obj.owner;
+            if (sObj && typeof sObj === 'object' && sObj.id != null) {
+              var sid = String(sObj.id);
+              if (/^\\d{5,}$/.test(sid) && sid !== String(lid)) {
+                map[String(lid)] = sid;
+              }
+            }
+            var dk = obj.seller_id || obj.sellerID || obj.owner_id || obj.ownerID;
+            if (dk != null && /^\\d{5,}$/.test(String(dk)) && String(dk) !== String(lid)) {
+              map[String(lid)] = String(dk);
             }
           }
-          var idKeys = ['seller_id', 'sellerID', 'owner_id', 'ownerID'];
-          for (i = 0; i < idKeys.length; i++) {
-            v = obj[idKeys[i]];
-            if (v != null) {
-              var t = String(v);
-              if (/^\\d{5,}$/.test(t) && t !== itemId) return t;
-            }
-          }
-          for (k in obj) {
+          for (var k in obj) {
             if (!obj.hasOwnProperty(k)) continue;
-            v = obj[k];
+            var v = obj[k];
             if (v && typeof v === 'object') {
-              var found = __rfFindSellerInJson(v, itemId, seen);
-              if (found) return found;
+              __rfFindListingsInJson(v, seen, map);
             }
-          }
-          return null;
-        } catch (e) { return null; }
-      }
-      function __rfTryCapture(text, url) {
-        try {
-          if (window.__rfSellerId) return;
-          if (!text) return;
-          if ((url || '').indexOf('graphql') < 0) return;
-          var m = (location.pathname || '').match(/\\/marketplace\\/item\\/(\\d+)/);
-          if (!m) return;
-          var itemId = m[1];
-          if (text.indexOf(itemId) < 0) return;
-          var data = null;
-          try { data = JSON.parse(text); } catch (e) { return; }
-          var id = __rfFindSellerInJson(data, itemId, []);
-          if (id) {
-            window.__rfSellerId = id;
-            window.__rfSellerItemId = itemId;
           }
         } catch (e) {}
       }
+      function __rfTryCapture(text, url) {
+        try {
+          if (!text) return;
+          if ((url || '').indexOf('graphql') < 0) return;
+          if (text.indexOf('seller') < 0) return;
+          var data = null;
+          try { data = JSON.parse(text); } catch (e) { return; }
+          if (!window.__rfSellerByItem) window.__rfSellerByItem = {};
+          __rfFindListingsInJson(data, [], window.__rfSellerByItem);
+        } catch (e) {}
+      }
       try {
+        if (!window.__rfSellerByItem) window.__rfSellerByItem = {};
+        if (!window.__rfCaptureStats) window.__rfCaptureStats = { f: 0, x: 0 };
         var origFetch = window.fetch;
         if (origFetch && !origFetch.__rfWrapped) {
           var wrappedFetch = function (input, init) {
@@ -104,6 +95,9 @@ export const MESSENGER_JS = `
                   try {
                     var clone = res.clone();
                     clone.text().then(function (text) {
+                      try {
+                        window.__rfCaptureStats.f++;
+                      } catch (e) {}
                       __rfTryCapture(text, url);
                     }).catch(function () {});
                   } catch (e) {}
@@ -133,6 +127,9 @@ export const MESSENGER_JS = `
                   var url = xhr.__rfUrl || '';
                   if (url.indexOf('graphql') < 0) return;
                   var text = xhr.responseText || '';
+                  try {
+                    window.__rfCaptureStats.x++;
+                  } catch (e) {}
                   __rfTryCapture(text, url);
                 } catch (e) {}
               });
@@ -146,18 +143,21 @@ export const MESSENGER_JS = `
   }
   __rfInstallSellerCapture();
   // Diagnostic for the network capture, for the MPA panel on
-  // item pages: the seller id stashed from the listing's
-  // GraphQL response, if any (marked stale when it was captured
-  // for a different item page).
+  // item pages: the seller id for the current item from the
+  // captured item→seller map, how many listings the map holds,
+  // and how many GraphQL fetch (f) and XHR (x) responses were
+  // processed — so a miss shows whether any data was seen at all.
   function __rfCaptureDiag() {
     try {
-      var id = window.__rfSellerId || null;
-      var item = window.__rfSellerItemId || null;
+      var map = window.__rfSellerByItem || {};
       var cur = '';
       var cm = (location.pathname || '').match(/\\/marketplace\\/item\\/(\\d+)/);
       if (cm) cur = cm[1];
-      if (!id) return 'none';
-      return id + (item === cur ? '' : ' (stale)');
+      var id = cur ? map[cur] : null;
+      var count = 0;
+      for (var k in map) if (map.hasOwnProperty(k)) count++;
+      var st = window.__rfCaptureStats || { f: 0, x: 0 };
+      return (id || 'none') + ' map=' + count + ' f=' + (st.f || 0) + ' x=' + (st.x || 0);
     } catch (e) { return 'captureDiag error'; }
   }
   // Extract a Messenger user (numeric id or username) from a
@@ -285,16 +285,16 @@ export const MESSENGER_JS = `
       // thread in Messenger — a photo id is not a user id.)
       var fiberId = __rfSellerIdFromFiber();
       if (fiberId) return fiberId;
-      // Network capture: the seller id stashed from the listing's
-      // GraphQL response (installed before content loads). Only
-      // use it when it was captured for THIS item page.
+      // Network capture: the seller id for this item from the
+      // item→seller map built out of the listing data as it
+      // arrived (including data prefetched while browsing the
+      // feed, before this listing was opened).
       try {
-        var capId = window.__rfSellerId;
-        var capItem = window.__rfSellerItemId;
+        var capMap = window.__rfSellerByItem;
         var curItem = '';
         var cm = (location.pathname || '').match(/\\/marketplace\\/item\\/(\\d+)/);
         if (cm) curItem = cm[1];
-        if (capId && capItem && capItem === curItem) return String(capId);
+        if (capMap && curItem && capMap[curItem]) return String(capMap[curItem]);
       } catch (e) {}
       return null;
     } catch (e) { return null; }
