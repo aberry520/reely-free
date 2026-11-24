@@ -44,6 +44,10 @@ export const MESSENGER_JS = `
       // /people/<slug>/<id>
       m = p.match(/^\\/people\\/[^/]+\\/(\\d+)/);
       if (m) return m[1];
+      // Marketplace seller profile: /marketplace/profile/<id>
+      // or /marketplace/user/<id>
+      m = p.match(/^\\/marketplace\\/(?:profile|user)\\/(\\d+)/);
+      if (m) return m[1];
       return null;
     } catch (e) { return null; }
   }
@@ -75,12 +79,16 @@ export const MESSENGER_JS = `
   }
   // Find the seller's profile identifier on a Marketplace item
   // page. Tries, in order: a numeric profile.php link, a
-  // /people/<slug>/<id> link, a username link inside the
-  // "Seller information" area. Returns the user string or null.
-  // (His video, 2026-11-24: seller=none on the seats listing,
-  // so the plain profile.php search found nothing — the seller's
-  // link is a username or /people/ path, or the name is not a
-  // link at all.)
+  // /people/<slug>/<id> link, a Marketplace seller-profile link
+  // (/marketplace/profile/<id> or /marketplace/user/<id>), a
+  // username link inside the "Seller information" area, and —
+  // as a last resort — the seller_id in the page's embedded JSON
+  // (the listing's initial data). Returns the user string or null.
+  // (His videos, 2026-11-24: seller=none and prof=0 ppl=0
+  // user=none on two listings, so the seller's name is not a
+  // profile link in any of those formats — the name/avatar is
+  // plain text or a JS-opened preview, and the id lives in the
+  // page data instead.)
   function __rfMessengerFindSeller() {
     try {
       var anchors = document.querySelectorAll('a[href]');
@@ -93,6 +101,11 @@ export const MESSENGER_JS = `
       for (i = 0; i < anchors.length; i++) {
         href = anchors[i].getAttribute('href') || '';
         m = href.match(/\\/people\\/[^/]+\\/(\\d+)/);
+        if (m) return m[1];
+      }
+      for (i = 0; i < anchors.length; i++) {
+        href = anchors[i].getAttribute('href') || '';
+        m = href.match(/\\/marketplace\\/(?:profile|user)\\/(\\d+)/);
         if (m) return m[1];
       }
       // Username link near the seller area: climb from a node
@@ -113,20 +126,68 @@ export const MESSENGER_JS = `
           return decodeURIComponent(path);
         }
       }
+      // Last resort: the seller_id in the page's embedded JSON.
+      var jsonId = __rfSellerIdFromJson();
+      if (jsonId) return jsonId;
       return null;
     } catch (e) { return null; }
   }
+  // The seller's numeric user id from the page's embedded JSON
+  // (the listing's initial data). Searches the <script> tags for
+  // "seller_id" followed by a number. Returns the id string or
+  // null. First match wins — the main listing's data loads first.
+  // (Every backslash is doubled in this TS source so the emitted
+  // JS keeps them — the standing template-literal lesson.)
+  function __rfSellerIdFromJson() {
+    try {
+      var scripts = document.querySelectorAll('script');
+      for (var i = 0; i < scripts.length; i++) {
+        var text = scripts[i].textContent || '';
+        if (!text) continue;
+        var m = text.match(/"seller_id"\\s*:\\s*"?(\d+)/);
+        if (m) return m[1];
+        m = text.match(/"sellerID"\\s*:\\s*"?(\d+)/);
+        if (m) return m[1];
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+  // The anchor hrefs (paths only, first few) inside the "Seller
+  // information" area, for the diagnostic panel — so the next
+  // retest shows exactly what the seller area actually links to.
+  function __rfSellerAreaHrefs() {
+    try {
+      var all = document.querySelectorAll('div, section, article');
+      for (var i = 0; i < all.length; i++) {
+        var txt = (all[i].textContent || '');
+        if (txt.indexOf('Seller details') < 0 &&
+            txt.indexOf('Seller information') < 0) continue;
+        var links = all[i].querySelectorAll('a[href]');
+        if (!links.length) return 'no links';
+        var out = [];
+        for (var j = 0; j < links.length && j < 3; j++) {
+          var href = links[j].getAttribute('href') || '';
+          var path = href.replace(/^https?:\\/\\/[^/]+/, '').split('?')[0];
+          out.push(path || href);
+        }
+        return out.join(' | ');
+      }
+      return 'no seller area';
+    } catch (e) { return 'area error'; }
+  }
   // Diagnostic for the seller lookup (reported in the MPA panel
-  // on item pages): how many profile.php / /people/ links exist,
-  // and the first single-segment link inside the seller area.
+  // on item pages): how many profile.php / /people/ /
+  // Marketplace-profile links exist, the JSON seller_id, and the
+  // first username link in the seller area.
   function __rfSellerDiag() {
     try {
       var anchors = document.querySelectorAll('a[href]');
-      var prof = 0, ppl = 0, firstUser = 'none';
+      var prof = 0, ppl = 0, mp = 0, firstUser = 'none';
       for (var i = 0; i < anchors.length; i++) {
         var href = anchors[i].getAttribute('href') || '';
         if (/profile\\.php\\?id=\\d+/.test(href)) prof++;
         if (/\\/people\\/[^/]+\\/\\d+/.test(href)) ppl++;
+        if (/\\/marketplace\\/(?:profile|user)\\/\\d+/.test(href)) mp++;
       }
       var all = document.querySelectorAll('div, section, article');
       outer:
@@ -143,7 +204,9 @@ export const MESSENGER_JS = `
           break outer;
         }
       }
-      return 'prof=' + prof + ' ppl=' + ppl + ' user=' + firstUser;
+      var jsonId = __rfSellerIdFromJson();
+      return 'prof=' + prof + ' ppl=' + ppl + ' mp=' + mp +
+        ' json=' + (jsonId || 'none') + ' user=' + firstUser;
     } catch (e) { return 'sellerDiag error'; }
   }
   // Post a Messenger open request to the app. user may be null
