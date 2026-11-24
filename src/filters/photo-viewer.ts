@@ -9,9 +9,15 @@
 // bounces it back to the feed. So photo taps open OUR viewer
 // instead: a full-screen overlay with the tapped photo, close,
 // prev/next and swipe. It never changes the page URL, so no
-// guard or navigation can interfere. Back closes the viewer
-// instead of leaving the page (a history state is pushed on
-// open; popstate closes the overlay).
+// guard or navigation can interfere.
+//
+// Closing never navigates either: the X and the backdrop just
+// remove the overlay, revealing the listing underneath (which
+// never went anywhere). An earlier version closed with
+// history.back() after a pushState, but the pushed state left no
+// entry to pop in this WebView, so Back went one too far and
+// landed on the feed instead of the listing (caught on video,
+// 2026-11-23). No history is touched at all now.
 //
 // The fragment is a plain JS string: it defines
 // installPhotoViewer() (no auto-call — each door calls it where
@@ -27,7 +33,6 @@ export const PHOTO_VIEWER_JS = `
       var photos = [];
       var index = 0;
       var open = false;
-      var pushed = false;
       var overlay = null;
       function itemId() {
         var m = location.pathname.match(/\\/marketplace\\/item\\/(\\d+)/);
@@ -37,37 +42,58 @@ export const PHOTO_VIEWER_JS = `
         var id = itemId();
         var out = [];
         if (!id) return out;
-        function addSrc(src) {
+        var found = [];
+        function addSrc(src, top, left) {
           if (!src || src.indexOf('http') !== 0) return;
-          if (out.indexOf(src) < 0) out.push(src);
+          for (var k = 0; k < found.length; k++) {
+            if (found[k].src === src) return;
+          }
+          found.push({ src: src, top: top, left: left });
         }
-        // (a) <img> photos linked to this item (desktop + mobile).
+        var scrollY = window.scrollY || window.pageYOffset || 0;
+        // (a) <img> photos: the listing's own photos are the large
+        // ones in the gallery zone at the top of the document
+        // (main photo + thumbnails). Same-item links qualify
+        // anywhere; unlinked photos only inside the zone, so a
+        // related listing's photo (far below) never qualifies.
+        // Plain <img>s with no link at all are the common mobile
+        // shape — an earlier version required a link and collected
+        // only the tapped photo, so swipe and the arrows did
+        // nothing (caught on video, 2026-11-23).
         var imgs = document.querySelectorAll('img');
         for (var i = 0; i < imgs.length; i++) {
           var im = imgs[i];
+          var r = im.getBoundingClientRect();
+          if (Math.max(r.width, r.height) < 60) continue;
           var a = im.closest ? im.closest('a[href]') : null;
-          if (!a) continue;
-          var href = a.getAttribute('href') || '';
-          if (href.indexOf('/marketplace/item/' + id) < 0) continue;
-          addSrc(im.currentSrc || im.src || '');
+          var href = a ? (a.getAttribute('href') || '') : '';
+          var sameItem = href.indexOf('/marketplace/item/' + id) >= 0;
+          var absY = r.top + scrollY;
+          if (!sameItem && (absY < 0 || absY >= 900)) continue;
+          addSrc(im.currentSrc || im.src || '', absY, r.left);
         }
-        // (b) Background-image photos in the gallery zone at the top
-        // of the document (mobile site: the main photo and its
-        // thumbnails are <div>s, not <img>s). Only large elements,
-        // so icons and avatars never qualify.
-        var scrollY = window.scrollY || window.pageYOffset || 0;
+        // (b) Background-image photos in the gallery zone (mobile
+        // site: some photos are <div>s, not <img>s). Only large
+        // elements, so icons and avatars never qualify.
         var divs = document.querySelectorAll('div');
         for (var j = 0; j < divs.length; j++) {
           var d = divs[j];
-          var r = d.getBoundingClientRect();
-          if (Math.max(r.width, r.height) < 60) continue;
-          var absY = r.top + scrollY;
-          if (absY < 0 || absY >= 900) continue;
+          var r2 = d.getBoundingClientRect();
+          if (Math.max(r2.width, r2.height) < 60) continue;
+          var absY2 = r2.top + scrollY;
+          if (absY2 < 0 || absY2 >= 900) continue;
           var bg = '';
           try { bg = getComputedStyle(d).backgroundImage || ''; } catch (e) {}
           var m = bg.match(/url\(["']?(https?:[^"')]+)["']?\)/);
-          if (m) addSrc(m[1]);
+          if (m) addSrc(m[1], absY2, r2.left);
         }
+        // Display order: top to bottom, then left to right (main
+        // photo first, thumbnails after, in reading order).
+        found.sort(function (p, q) {
+          if (p.top !== q.top) return p.top - q.top;
+          return p.left - q.left;
+        });
+        for (var n = 0; n < found.length; n++) out.push(found[n].src);
         return out;
       }
       function show(i) {
@@ -145,15 +171,21 @@ export const PHOTO_VIEWER_JS = `
         (document.body || document.documentElement).appendChild(overlay);
         open = true;
         show(index);
-        try {
-          history.pushState({ rfViewer: 1 }, '', location.href);
-          pushed = true;
-        } catch (e) {}
         var startX = 0, startY = 0;
         overlay.addEventListener('touchstart', function (e) {
           var t = e.changedTouches && e.changedTouches[0];
           if (t) { startX = t.clientX; startY = t.clientY; }
         }, { passive: true });
+        // Claim horizontal swipes so the WebView doesn't steal the
+        // gesture for its own navigation.
+        overlay.addEventListener('touchmove', function (e) {
+          var t = e.changedTouches && e.changedTouches[0];
+          if (!t) return;
+          var dx = t.clientX - startX, dy = t.clientY - startY;
+          if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+            e.preventDefault();
+          }
+        }, { passive: false });
         overlay.addEventListener('touchend', function (e) {
           var t = e.changedTouches && e.changedTouches[0];
           if (!t) return;
@@ -162,33 +194,22 @@ export const PHOTO_VIEWER_JS = `
             show(index + (dx < 0 ? 1 : -1));
           }
         }, { passive: true });
+        // Close never navigates: the X and the backdrop just remove
+        // the overlay, revealing the listing underneath.
         overlay.addEventListener('click', function (e) {
           var t = e.target;
           if (!t) return;
-          var goBack = false;
           if (t.hasAttribute && t.hasAttribute('data-rf-pv-close')) {
-            goBack = true;
             closeViewer();
           } else if (t.hasAttribute && t.hasAttribute('data-rf-pv-prev')) {
             show(index - 1);
           } else if (t.hasAttribute && t.hasAttribute('data-rf-pv-next')) {
             show(index + 1);
           } else if (t === overlay) {
-            goBack = true;
             closeViewer();
-          }
-          if (goBack && pushed) {
-            pushed = false;
-            try { history.back(); } catch (e2) {}
           }
         });
       }
-      window.addEventListener('popstate', function () {
-        if (open) {
-          pushed = false;
-          closeViewer();
-        }
-      });
       // Capture-phase tap intercept, on item pages only. The
       // listing's own photo opens our viewer instead of whatever
       // Facebook would do with the tap. Two shapes: an <img> whose
