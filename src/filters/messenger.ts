@@ -129,8 +129,136 @@ export const MESSENGER_JS = `
       // Last resort: the seller_id in the page's embedded JSON.
       var jsonId = __rfSellerIdFromJson();
       if (jsonId) return jsonId;
+      // The id is not in the DOM or the page HTML at all (his
+      // screenshots: no links in the seller area, no seller_id
+      // anywhere in the full HTML, Message/Send are plain divs),
+      // so it lives in React state. Walk the fiber from the
+      // Message button and read it out of the component props.
+      var fiberId = __rfSellerIdFromFiber();
+      if (fiberId) return fiberId;
+      // Final fallback: a long number in the seller avatar's
+      // image URL (a graph.facebook.com/<id>/picture URL carries
+      // the user id; a CDN photo URL carries a photo id instead —
+      // the panel reports which one fired, so a wrong hit is
+      // visible and removable next round).
+      var avatarId = __rfSellerAvatarId();
+      if (avatarId) return avatarId;
       return null;
     } catch (e) { return null; }
+  }
+  // Recursively search a React props object for the seller's
+  // user id: a seller/user/owner/actor/profile object carrying
+  // a numeric id, or a direct seller_id/user_id/owner_id prop.
+  // depth caps the recursion; seen guards circular refs; the
+  // item id is never a seller id; viewer/currentUser/me are
+  // skipped (the viewer's own id, not the seller's).
+  function __rfSearchPropsForSeller(obj, depth, itemId, seen) {
+    try {
+      if (!obj || typeof obj !== 'object' || depth > 4) return null;
+      if (obj.nodeType || obj.$$typeof) return null;
+      if (seen.indexOf(obj) >= 0) return null;
+      seen.push(obj);
+      if (seen.length > 300) return null;
+      var i, k, v;
+      var objKeys = ['seller', 'user', 'owner', 'actor', 'profile', 'sellerInfo', 'seller_info'];
+      for (i = 0; i < objKeys.length; i++) {
+        v = obj[objKeys[i]];
+        if (v && typeof v === 'object' && v.id != null) {
+          var s = String(v.id);
+          if (/^\\d{5,}$/.test(s) && s !== itemId) return s;
+        }
+        if (typeof v === 'string' && /^\\d{5,}$/.test(v) && v !== itemId) return v;
+      }
+      var idKeys = ['seller_id', 'sellerID', 'user_id', 'userID', 'owner_id', 'ownerID', 'seller_profile_id', 'profile_id'];
+      for (i = 0; i < idKeys.length; i++) {
+        v = obj[idKeys[i]];
+        if (v != null) {
+          var t = String(v);
+          if (/^\\d{5,}$/.test(t) && t !== itemId) return t;
+        }
+      }
+      for (k in obj) {
+        if (!obj.hasOwnProperty(k)) continue;
+        if (k === 'viewer' || k === 'currentUser' || k === 'me') continue;
+        v = obj[k];
+        if (v && typeof v === 'object') {
+          var found = __rfSearchPropsForSeller(v, depth + 1, itemId, seen);
+          if (found) return found;
+        }
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+  // The seller's user id from React state: find the fiber on the
+  // Message button div, walk up the fiber tree and search each
+  // level's memoizedProps for the seller. Cached per item page;
+  // a null result is retried at most every 3 seconds (the listing
+  // data can arrive after the first attempt).
+  var __rfFiberCache = { path: '', id: null, at: 0 };
+  function __rfSellerIdFromFiber() {
+    try {
+      var path = location.pathname || '';
+      var now = Date.now();
+      if (__rfFiberCache.path === path && __rfFiberCache.id) return __rfFiberCache.id;
+      if (__rfFiberCache.path === path && (now - __rfFiberCache.at) < 3000) return null;
+      var id = null;
+      var btn = __rfFindMsgControl(document.body);
+      if (btn) {
+        var key = null;
+        var keys = Object.keys(btn);
+        for (var i = 0; i < keys.length; i++) {
+          if (keys[i].indexOf('__reactFiber$') === 0 ||
+              keys[i].indexOf('__reactInternalInstance$') === 0) { key = keys[i]; break; }
+        }
+        if (key) {
+          var itemId = '';
+          var pm = path.match(/\\/marketplace\\/item\\/(\\d+)/);
+          if (pm) itemId = pm[1];
+          var node = btn[key];
+          var seen = 0;
+          while (node && seen < 25) {
+            seen++;
+            if (node.memoizedProps) {
+              id = __rfSearchPropsForSeller(node.memoizedProps, 0, itemId, []);
+              if (id) break;
+            }
+            node = node.return;
+          }
+        }
+      }
+      __rfFiberCache = { path: path, id: id, at: now };
+      return id;
+    } catch (e) { return null; }
+  }
+  // A long number in the seller avatar's image URL. The avatar
+  // sits in the seller area; a graph.facebook.com/<id>/picture
+  // URL carries the user id directly.
+  function __rfSellerAvatarId() {
+    try {
+      var all = document.querySelectorAll('div, section, article');
+      for (var i = 0; i < all.length; i++) {
+        var txt = (all[i].textContent || '');
+        if (txt.indexOf('Seller details') < 0 &&
+            txt.indexOf('Seller information') < 0) continue;
+        var imgs = all[i].querySelectorAll('img[src]');
+        for (var j = 0; j < imgs.length; j++) {
+          var src = imgs[j].getAttribute('src') || '';
+          var m = src.match(/(\\d{10,})/);
+          if (m) return m[1];
+        }
+        return null;
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+  // Diagnostic for the fiber / avatar seller-id sources, for the
+  // MPA panel on item pages.
+  function __rfFiberDiag() {
+    try {
+      var fiberId = __rfSellerIdFromFiber();
+      var avatarId = __rfSellerAvatarId();
+      return 'fiber=' + (fiberId || 'none') + ' avatar=' + (avatarId || 'none');
+    } catch (e) { return 'fiberDiag error'; }
   }
   // The seller's numeric user id from the page's embedded data.
   // The seller's name/avatar is not a link (his videos:
