@@ -92,59 +92,53 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     }
     hide(node);
   }
-  // Branded header (Austin's ask, 2026-11-23; full lockup
-  // refined the same day): the YouTube logo in the top bar is
-  // replaced with the full "Reely [mark] Free" lockup — the same
-  // header the Facebook door shows. The link itself is untouched,
-  // so tapping it still goes home; the search and avatar controls
-  // beside it are untouched. The bottom pivot bar's Home item is
-  // also an a[href="/"], but it sits near the bottom of the
-  // screen, so the top-90px gate excludes it.
-  function brandHeaderLogo() {
+  // Branded header (Austin's ask, 2026-11-23; centered, refined
+  // the same day): the logo-slot swap never landed — the original
+  // logo still showed — and he wants the header top-middle, not
+  // left. So the header is now an independent element pinned to
+  // the top center of the viewport: "Reely [mark] Free", sitting
+  // in the empty middle of the top bar between the logo and the
+  // search icon. It never finds or touches the site's own header,
+  // so it can't miss and can't break it. It is
+  // pointer-events:none, so it can never eat a tap, and it only
+  // shows on Home and Subscriptions, where the top bar is the
+  // standard one; on watch/search pages it hides so it never
+  // covers a title.
+  function brandHeaderCenter() {
     try {
-      if (!S.brandHeader) return;
-      var links = document.querySelectorAll(
-        'a[href="/"], a[aria-label*="YouTube"]');
-      for (var i = 0; i < links.length; i++) {
-        var link = links[i];
-        if (link.getAttribute('data-rf-logo')) continue;
-        var r = link.getBoundingClientRect();
-        if (r.top < 0 || r.top > 90) continue;
-        if (r.width < 20 || r.width > 220) continue;
-        if (r.height < 20 || r.height > 60) continue;
-        if (!link.querySelector('svg, img, yt-icon')) continue;
-        var fg = '';
-        try { fg = getComputedStyle(link).color; } catch (e) {}
-        while (link.firstChild) link.removeChild(link.firstChild);
-        link.style.display = 'inline-flex';
-        link.style.alignItems = 'center';
-        link.style.gap = '6px';
-        link.style.textDecoration = 'none';
-        link.style.whiteSpace = 'nowrap';
-        link.style.width = 'auto';
-        link.style.flexShrink = '0';
-        if (fg) link.style.color = fg;
-        var left = document.createElement('span');
-        left.textContent = 'Reely';
-        left.style.fontWeight = '800';
-        left.style.fontSize = '14px';
-        left.style.letterSpacing = '0.2px';
-        var img = document.createElement('img');
-        img.src = MARK;
-        img.alt = 'Reely Free';
-        img.style.cssText =
-          'height:20px;width:20px;border-radius:5px;display:block;';
-        var right = document.createElement('span');
-        right.textContent = 'Free';
-        right.style.fontWeight = '800';
-        right.style.fontSize = '14px';
-        right.style.letterSpacing = '0.2px';
-        link.appendChild(left);
-        link.appendChild(img);
-        link.appendChild(right);
-        link.setAttribute('data-rf-logo', '1');
+      var el = document.getElementById('rf-brand-center');
+      var p = location.pathname || '/';
+      var onMain = (p === '/' || p === '' ||
+        p === '/feed/subscriptions');
+      if (!S.brandHeader || !onMain) {
+        if (el) el.remove();
         return;
       }
+      if (el && el.isConnected) return;
+      var fg = '';
+      try { fg = getComputedStyle(document.body).color; } catch (e) {}
+      el = document.createElement('div');
+      el.id = 'rf-brand-center';
+      el.style.cssText =
+        'position:fixed;left:50%;top:26px;' +
+        'transform:translate(-50%,-50%);' +
+        'display:flex;align-items:center;gap:6px;' +
+        'font-weight:800;font-size:14px;letter-spacing:0.2px;' +
+        'color:' + (fg || '#111111') + ';pointer-events:none;' +
+        'white-space:nowrap;z-index:2147483647;';
+      var left = document.createElement('span');
+      left.textContent = 'Reely';
+      var img = document.createElement('img');
+      img.src = MARK;
+      img.alt = 'Reely Free';
+      img.style.cssText =
+        'height:20px;width:20px;border-radius:5px;display:block;';
+      var right = document.createElement('span');
+      right.textContent = 'Free';
+      el.appendChild(left);
+      el.appendChild(img);
+      el.appendChild(right);
+      (document.body || document.documentElement).appendChild(el);
     } catch (e) {}
   }
   function apply() {
@@ -154,7 +148,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
         var m = path.match(/^\\/shorts\\/([\\w-]{6,})/);
         if (m) { location.replace('/watch?v=' + m[1]); return; }
       }
-      brandHeaderLogo();
+      brandHeaderCenter();
       if (S.landOnSubs && path === '/') {
         location.replace('/feed/subscriptions');
         return;
