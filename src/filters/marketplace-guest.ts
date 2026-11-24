@@ -1,6 +1,7 @@
 import type { FilterSettings } from '../lib/settings';
 import { LOGO_MARK_DATA_URI } from './logo-data';
 import { PHOTO_VIEWER_JS } from './photo-viewer';
+import { DIAG_JS } from './diag';
 
 // Builds the JavaScript injected into the DESKTOP facebook.com/marketplace
 // before page content loads, for the experimental guest door.
@@ -29,6 +30,7 @@ export function buildMarketplaceGuestScript(
     blockLoginBar: settings.mpGuestBlockLoginBar,
     nativeShare: settings.mpGuestNativeShare,
     brandHeader: settings.mpGuestBrandHeader,
+    diagnostics: settings.diagnosticsEnabled,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
@@ -36,6 +38,7 @@ export function buildMarketplaceGuestScript(
 (function () {
   var S = ${s};
   var MARK = ${mark};
+${DIAG_JS}
   // Photo viewer: installed whenever the door itself is enabled,
   // independent of the sub-toggles below — viewing a listing's
   // photos is core door behavior, and the desktop photo is a
@@ -593,6 +596,19 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // Diagnostic lines (Austin's ask, 2026-11-24): what the door's
+  // filter sees, behind the Settings toggle. hidden = login walls
+  // and bars the filter hid; viewer = our photo viewer is open.
+  function diagLines() {
+    try {
+      var hidden = document.querySelectorAll('[data-rf-hidden]').length;
+      var viewer = !!document.querySelector('[data-rf-viewer]');
+      return [
+        'MP path=' + (location.pathname || ''),
+        'hidden=' + hidden + ' viewer=' + (viewer ? 'YES' : 'NO'),
+      ];
+    } catch (e) { return ['MP diag error']; }
+  }
   function apply() {
     ensureStyle();
     brandHeaderLogo();
@@ -659,6 +675,13 @@ export function buildMarketplaceGuestScript(
     }, true);
   } catch (e) {}
   setInterval(apply, 2500);
+  // Diagnostic panel (Settings toggle): refresh the shared panel
+  // once a second with this door's lines. Only when the toggle is
+  // on — the WebView remounts when the setting changes, so turning
+  // it off drops the panel with the page reload.
+  if (S.diagnostics) {
+    setInterval(function () { __rfDiag(diagLines()); }, 1000);
+  }
   // Photo viewer (our own — Facebook's is a no-op on this door):
   // tapping a listing photo opens the overlay, with close,
   // prev/next and swipe. Installed near the top of this script,

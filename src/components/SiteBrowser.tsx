@@ -37,6 +37,7 @@ import {
 } from '../lib/locks';
 import type { FilterSettings } from '../lib/settings';
 import { useSettings } from '../lib/settings';
+import { isExpoGo } from '../lib/is-expo-go';
 import { useTheme } from '../lib/theme';
 import {
   addUsageSeconds,
@@ -252,7 +253,17 @@ export default function SiteBrowser({
 
   // Rebuild (and remount) the WebView when the toggles change so the new
   // rules are the ones injected from the very first paint.
-  const script = useMemo(() => buildScript(settings), [buildScript, settings]);
+  // Diagnostics only exist in Expo Go (Austin's ask, 2026-11-24):
+  // even if the setting was left on, a standalone build never gets
+  // diagnostics:true in its filter script.
+  const script = useMemo(
+    () =>
+      buildScript({
+        ...settings,
+        diagnosticsEnabled: isExpoGo && settings.diagnosticsEnabled,
+      }),
+    [buildScript, settings],
+  );
 
   const goHome = () => router.navigate('/');
 

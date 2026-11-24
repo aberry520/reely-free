@@ -1,5 +1,6 @@
 import type { FilterSettings } from '../lib/settings';
 import { LOGO_MARK_DATA_URI } from './logo-data';
+import { DIAG_JS } from './diag';
 
 // Builds the JavaScript injected into m.youtube.com before page content
 // loads. Rules target stable hooks (URLs, element tags, visible text) rather
@@ -16,6 +17,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     blockAppPromo: settings.ytBlockAppPromo,
     swipeDownBack: settings.ytSwipeDownBack,
     brandHeader: settings.ytBrandHeader,
+    diagnostics: settings.diagnosticsEnabled,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
 
@@ -23,6 +25,7 @@ export function buildYouTubeScript(settings: FilterSettings): string {
 (function () {
   var S = ${s};
   var MARK = ${mark};
+${DIAG_JS}
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
@@ -260,6 +263,40 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       }
     } catch (e) {}
   }
+  // Diagnostic lines (Austin's ask, 2026-11-24): what the PiP
+  // button diagnostic used to report, now behind the Settings
+  // toggle instead of a one-off panel. Shown by the shared
+  // __rfDiag helper when S.diagnostics is on.
+  function diagLines() {
+    try {
+      var vids = document.querySelectorAll('video');
+      var lines = ['YT path=' + (location.pathname || '')];
+      lines.push('vids=' + vids.length +
+        ' pipEl=' + !!document.pictureInPictureElement +
+        ' fs=' + !!document.fullscreenElement);
+      for (var i = 0; i < vids.length && i < 4; i++) {
+        var vv = vids[i];
+        var rr = vv.getBoundingClientRect();
+        lines.push('v' + i + ': ' + (vv.paused ? 'paused' : 'PLAY') +
+          ' rdy=' + vv.readyState +
+          ' ' + Math.round(rr.width) + 'x' + Math.round(rr.height) +
+          ' @' + Math.round(rr.left) + ',' + Math.round(rr.top) +
+          (vv.webkitDisplayingFullscreen ? ' FULLSCREEN' : ''));
+      }
+      var found = findPipVideo(true);
+      lines.push('find=' + (found ? 'YES' : 'null'));
+      var btn = document.getElementById('rf-pip-btn');
+      if (btn) {
+        var br = btn.getBoundingClientRect();
+        lines.push('btn=YES disp=' + btn.style.display +
+          ' ' + Math.round(br.width) + 'x' + Math.round(br.height) +
+          ' @' + Math.round(br.left) + ',' + Math.round(br.top));
+      } else {
+        lines.push('btn=NO');
+      }
+      return lines;
+    } catch (e) { return ['YT diag error']; }
+  }
   function apply() {
     try {
       var path = location.pathname;
@@ -351,6 +388,13 @@ export function buildYouTubeScript(settings: FilterSettings): string {
     obs.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
   setInterval(apply, 3000);
+  // Diagnostic panel (Settings toggle): refresh the shared panel
+  // once a second with this door's lines. Only when the toggle is
+  // on — the WebView remounts when the setting changes, so turning
+  // it off drops the panel with the page reload.
+  if (S.diagnostics) {
+    setInterval(function () { __rfDiag(diagLines()); }, 1000);
+  }
   // Keep the PiP button glued to the video while scrolling (apply
   // only runs every 3s, so a scroll would otherwise leave the
   // button floating over the comments for a moment).

@@ -108,6 +108,12 @@ export interface FilterSettings {
   // opens then closes the fan, as before). 'lastDoor' = the door
   // you were in before this one.
   hubDoubleTap: 'none' | 'back' | 'home' | 'settings' | 'lastDoor';
+  // Diagnostic panels (Austin's ask, 2026-11-24): when on, every
+  // door shows a small panel at the bottom reporting what that
+  // door's filter sees — the page, the videos, what got blocked
+  // or covered. Turn it on when testing a new feature, off when
+  // you're done. Off by default.
+  diagnosticsEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: FilterSettings = {
@@ -165,6 +171,7 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   ytBedtimeHour: 0,
   mpBedtimeHour: 0,
   mpaBedtimeHour: 0,
+  diagnosticsEnabled: false,
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';

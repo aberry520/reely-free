@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import type { FilterSettings } from '../src/lib/settings';
 import { useSettings } from '../src/lib/settings';
+import { isExpoGo } from '../src/lib/is-expo-go';
 import { useTheme } from '../src/lib/theme';
 import type { UsageAppId } from '../src/lib/usage';
 import {
@@ -698,6 +699,29 @@ export default function SettingsScreen() {
               </View>
             </View>
           </View>
+        </>
+      )}
+
+      {/* Diagnostics only exist in Expo Go (Austin's ask,
+          2026-11-24): a standalone / store build never shows this
+          section at all. */}
+      {isExpoGo && (
+        <>
+          <GroupHeader
+            title="Diagnostics"
+            collapsed={isCollapsed('diagnostics')}
+            onToggleCollapse={() => toggleCollapse('diagnostics')}
+          />
+          {!isCollapsed('diagnostics') && (
+            <>
+              <ToggleRow
+                label="Diagnostic panels"
+                detail="Shows a small panel at the bottom of each door reporting what that door's filter sees — the page, the videos, what got blocked or covered. Turn it on when testing a new feature, off when you're done."
+                value={settings.diagnosticsEnabled}
+                onChange={set('diagnosticsEnabled')}
+              />
+            </>
+          )}
         </>
       )}
 

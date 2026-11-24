@@ -1,6 +1,7 @@
 import type { FilterSettings } from '../lib/settings';
 import { LOGO_MARK_DATA_URI } from './logo-data';
 import { PHOTO_VIEWER_JS } from './photo-viewer';
+import { DIAG_JS } from './diag';
 
 // Builds the JavaScript injected into facebook.com before page
 // content loads, for the Marketplace door WITH his account
@@ -58,6 +59,7 @@ export function buildMarketplaceAccountScript(
     allowMessages: settings.mpaAllowMessages,
     blockAppPromo: settings.mpaBlockAppPromo,
     brandHeader: settings.mpaBrandHeader,
+    diagnostics: settings.diagnosticsEnabled,
   });
   const logo = JSON.stringify(LOGO_MARK_DATA_URI);
 
@@ -67,6 +69,7 @@ export function buildMarketplaceAccountScript(
   if (!S.enabled) { true; return; }
   var HOME = 'https://www.facebook.com/marketplace';
   var LOGO_SRC = ${logo};
+${DIAG_JS}
   function isFb() {
     return /(^|\\.)facebook\\.com$/.test(location.hostname);
   }
@@ -419,6 +422,26 @@ export function buildMarketplaceAccountScript(
       c.style.display = 'flex';
     } catch (e) {}
   }
+  // Diagnostic lines (Austin's ask, 2026-11-24): what the door's
+  // filter sees, behind the Settings toggle. stay = the guard is
+  // on; overlay = a Marketplace overlay is open (location, search,
+  // categories — all route through "/"); feed = the page is
+  // actually the Facebook feed (what "/" bounces on); cover = the
+  // Reely Free header strip is up; viewer = our photo viewer.
+  function diagLines() {
+    try {
+      var cover = !!document.getElementById('rf-mpa-cover');
+      var viewer = !!document.querySelector('[data-rf-viewer]');
+      return [
+        'MPA path=' + (location.pathname || ''),
+        'stay=' + (S.stay ? 'YES' : 'NO') +
+          ' overlay=' + (mpaOverlayOpen() ? 'YES' : 'NO') +
+          ' feed=' + (isFacebookFeed() ? 'YES' : 'NO'),
+        'cover=' + (cover ? 'YES' : 'NO') +
+          ' viewer=' + (viewer ? 'YES' : 'NO'),
+      ];
+    } catch (e) { return ['MPA diag error']; }
+  }
   function apply() {
     try { sweepPromo(); } catch (e) {}
     try { positionCover(); } catch (e) {}
@@ -457,6 +480,15 @@ export function buildMarketplaceAccountScript(
   // natively.
   ${PHOTO_VIEWER_JS}
   if (S.stay) { installPhotoViewer(); }
+  // Diagnostic panel (Settings toggle): refresh the shared panel
+  // once a second with this door's lines. Only when the toggle is
+  // on — the WebView remounts when the setting changes, so turning
+  // it off drops the panel with the page reload. This interval is
+  // separate from apply(), which only runs when the promo sweep
+  // or header cover is on.
+  if (S.diagnostics) {
+    setInterval(function () { __rfDiag(diagLines()); }, 1000);
+  }
   true;
 })();
 `;

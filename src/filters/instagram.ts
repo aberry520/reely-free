@@ -1,5 +1,6 @@
 import type { FilterSettings } from '../lib/settings';
 import { LOGO_FULL_DATA_URI, LOGO_MARK_DATA_URI } from './logo-data';
+import { DIAG_JS } from './diag';
 
 // Builds the JavaScript injected into instagram.com before page content
 // loads. Stable hooks only (URLs, visible label text) instead of class
@@ -41,6 +42,7 @@ export function buildInstagramScript(settings: FilterSettings): string {
     blockSuggested: settings.igHideSuggested,
     blockAppPromo: settings.igBlockAppPromo,
     brandHeader: settings.igBrandHeader,
+    diagnostics: settings.diagnosticsEnabled,
   });
   const logo = JSON.stringify(LOGO_FULL_DATA_URI);
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
@@ -50,6 +52,7 @@ export function buildInstagramScript(settings: FilterSettings): string {
   var S = ${s};
   var LOGO = ${logo};
   var MARK = ${mark};
+${DIAG_JS}
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
@@ -331,6 +334,26 @@ export function buildInstagramScript(settings: FilterSettings): string {
       (document.body || document.documentElement).appendChild(el);
     } catch (e) {}
   }
+  // Diagnostic lines (Austin's ask, 2026-11-24): what the door's
+  // filter sees, behind the Settings toggle. cover = the Explore
+  // grid cover is up; reelsRoute = on a Reels route (redirects
+  // home when the block is on); branded = Reels nav entries
+  // carrying the Reely Free mark.
+  function diagLines() {
+    try {
+      var path = location.pathname || '';
+      var cover = !!document.getElementById('rf-explore-cover');
+      var reelsRoute = path === '/reels' ||
+        path.indexOf('/reels/') === 0 || path.indexOf('/reel/') === 0;
+      var branded = document.querySelectorAll('[data-rf-branded]').length;
+      return [
+        'IG path=' + path,
+        'cover=' + (cover ? 'YES' : 'NO') +
+          ' reelsRoute=' + (reelsRoute ? 'YES' : 'NO') +
+          ' branded=' + branded,
+      ];
+    } catch (e) { return ['IG diag error']; }
+  }
   function apply() {
     try {
       var path = location.pathname;
@@ -408,6 +431,13 @@ export function buildInstagramScript(settings: FilterSettings): string {
     }, true);
   } catch (e) {}
   setInterval(apply, 2500);
+  // Diagnostic panel (Settings toggle): refresh the shared panel
+  // once a second with this door's lines. Only when the toggle is
+  // on — the WebView remounts when the setting changes, so turning
+  // it off drops the panel with the page reload.
+  if (S.diagnostics) {
+    setInterval(function () { __rfDiag(diagLines()); }, 1000);
+  }
   true;
 })();
 `;

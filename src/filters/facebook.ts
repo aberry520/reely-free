@@ -1,5 +1,6 @@
 import type { FilterSettings } from '../lib/settings';
 import { LOGO_FULL_DATA_URI, LOGO_MARK_DATA_URI } from './logo-data';
+import { DIAG_JS } from './diag';
 
 // Builds the JavaScript injected into facebook.com before page content
 // loads. Rules target stable hooks (URLs, role="article", visible label
@@ -17,6 +18,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
     blockAppPromo: settings.fbBlockAppPromo,
     stickyHeader: settings.fbStickyHeader,
     brandHeader: settings.fbBrandHeader,
+    diagnostics: settings.diagnosticsEnabled,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
   const logo = JSON.stringify(LOGO_FULL_DATA_URI);
@@ -26,6 +28,7 @@ export function buildFacebookScript(settings: FilterSettings): string {
   var S = ${s};
   var MARK = ${mark};
   var LOGO = ${logo};
+${DIAG_JS}
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
@@ -647,6 +650,24 @@ export function buildFacebookScript(settings: FilterSettings): string {
       } catch (err) {}
     }, { capture: true, passive: false });
   }
+  // Diagnostic lines (Austin's ask, 2026-11-24): what the door's
+  // filter sees, behind the Settings toggle. viewer = a video
+  // viewer is open (the back button only exists then); covers =
+  // Reels sections covered with the logo panel; brand = the
+  // "Reely Free" header strip is in the header row.
+  function diagLines() {
+    try {
+      var covers = document.querySelectorAll('[data-rf-covered]').length;
+      var viewer = !!document.querySelector('[data-rf-back]');
+      var brand = !!document.getElementById('rf-fb-brand');
+      return [
+        'FB path=' + (location.pathname || ''),
+        'viewer=' + (viewer ? 'YES' : 'NO') +
+          ' covers=' + covers +
+          ' brand=' + (brand ? 'YES' : 'NO'),
+      ];
+    } catch (e) { return ['FB diag error']; }
+  }
   function apply() {
     try {
       // Reel routes reached any other way (notifications, shared
@@ -909,6 +930,13 @@ export function buildFacebookScript(settings: FilterSettings): string {
     obs.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
   setInterval(apply, 3000);
+  // Diagnostic panel (Settings toggle): refresh the shared panel
+  // once a second with this door's lines. Only when the toggle is
+  // on — the WebView remounts when the setting changes, so turning
+  // it off drops the panel with the page reload.
+  if (S.diagnostics) {
+    setInterval(function () { __rfDiag(diagLines()); }, 1000);
+  }
   // Header that comes back on scroll up, like the app. Facebook serves
   // different markup to different clients and nests it deeply, so the
   // header is found at runtime by scanning the page: an element that
