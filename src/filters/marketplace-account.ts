@@ -60,6 +60,13 @@ export function buildMarketplaceAccountScript(
   }
   function allowed(path) {
     if (path.indexOf('/marketplace') === 0) return true;
+    // Photo viewer (Austin's report, 2026-11-23): tapping a
+    // listing photo opens the viewer at /photo.php (mobile) or
+    // /photo/ — the guard didn't allow it, so it bounced the
+    // viewer back to the feed (his video: viewer opens, Facebook
+    // splash, feed). Viewing a listing's photos is part of
+    // Marketplace, so the viewer routes stay allowed.
+    if (path.indexOf('/photo') === 0) return true;
     if (path.indexOf('/login') === 0) return true;
     if (path.indexOf('/checkpoint') === 0) return true;
     if (path.indexOf('/recover') === 0) return true;

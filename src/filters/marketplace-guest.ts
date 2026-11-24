@@ -581,6 +581,86 @@ export function buildMarketplaceGuestScript(
       }
     } catch (e) {}
   }
+  // TEMPORARY diagnostic (2026-11-23): tapping a listing photo
+  // on the detail page does nothing — no viewer opens. This panel
+  // reports what the tap actually hits and whether a photo viewer
+  // layer ever appears (and whether our own sweeps hide it). It
+  // comes out in the same commit as the fix it informs. The panel
+  // is pointer-events:none, so it can never eat a tap itself.
+  var diagLastTap = 'none yet';
+  var diagSeenAt = '';
+  var diagHiddenAt = '';
+  function diagNow() {
+    try {
+      return new Date().toTimeString().slice(0, 8);
+    } catch (e) { return ''; }
+  }
+  function diagUpdate() {
+    try {
+      var panel = document.getElementById('rf-guest-diag');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'rf-guest-diag';
+        panel.style.cssText =
+          'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;' +
+          'background:rgba(0,0,0,0.88);color:#fff;' +
+          'font:11px/1.5 monospace;white-space:pre-wrap;' +
+          'padding:6px 8px;pointer-events:none;';
+        (document.body || document.documentElement).appendChild(panel);
+      }
+      var layers = 0, withImg = 0, hidden = 0;
+      var els = document.querySelectorAll('div, section, figure');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var pos = '';
+        try { pos = window.getComputedStyle(el).position; } catch (e) {}
+        if (pos !== 'fixed' && pos !== 'absolute') continue;
+        var r = el.getBoundingClientRect();
+        if (r.width < window.innerWidth * 0.95) continue;
+        if (r.height < window.innerHeight * 0.95) continue;
+        layers++;
+        var hasImg = !!(el.querySelector && el.querySelector('img'));
+        if (hasImg) withImg++;
+        if (el.getAttribute('data-rf-hidden')) hidden++;
+        if (hasImg && !diagSeenAt) diagSeenAt = diagNow();
+        if (el.getAttribute('data-rf-hidden') && !diagHiddenAt) {
+          diagHiddenAt = diagNow();
+        }
+      }
+      var viewer = diagSeenAt
+        ? 'seen ' + diagSeenAt +
+          (diagHiddenAt ? ' | HIDDEN ' + diagHiddenAt : ' | not hidden')
+        : 'never seen';
+      panel.textContent =
+        'DIAG tap: ' + diagLastTap + '\\n' +
+        'url: ' + location.pathname + '\\n' +
+        'fullscreen layers: ' + layers +
+        ' (with img: ' + withImg + ', hidden: ' + hidden + ')\\n' +
+        'viewer: ' + viewer;
+    } catch (e) {}
+  }
+  document.addEventListener('click', function (ev) {
+    try {
+      var t = ev.target;
+      var tag = t && t.tagName ? t.tagName.toLowerCase() : '?';
+      var cls = '';
+      try {
+        cls = (t && t.className && t.className.toString
+          ? t.className.toString() : '').slice(0, 30);
+      } catch (e) {}
+      var a = t && t.closest ? t.closest('a[href]') : null;
+      var href = a ? (a.getAttribute('href') || '').slice(0, 60) : '-';
+      var host = t && t.closest ? t.closest('div, figure, a') : null;
+      var hasImg = !!(host && host.querySelector &&
+        host.querySelector('img'));
+      diagLastTap = tag + '.' + cls + ' href=' + href +
+        ' img=' + (hasImg ? 'y' : 'n');
+      diagUpdate();
+      setTimeout(diagUpdate, 300);
+    } catch (e) {}
+  }, true);
+  setInterval(diagUpdate, 1000);
+  diagUpdate();
   function apply() {
     ensureStyle();
     brandHeaderLogo();
