@@ -313,6 +313,7 @@ export function buildInstagramScript(settings: FilterSettings): string {
         'transform:translate(-50%,-50%);' +
         'display:flex;align-items:center;gap:6px;' +
         'font-weight:800;font-size:14px;letter-spacing:0.2px;' +
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;' +
         'color:' + (fg || '#111111') + ';pointer-events:none;' +
         'white-space:nowrap;z-index:2147483647;';
       var left = document.createElement('span');
