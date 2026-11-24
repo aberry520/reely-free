@@ -212,11 +212,27 @@ export function buildYouTubeScript(settings: FilterSettings): string {
           'border-radius:20px;border:0;padding:0;' +
           'background:rgba(0,0,0,0.55);display:flex;' +
           'align-items:center;justify-content:center;';
-        btn.innerHTML =
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none">' +
-          '<rect x="2" y="4" width="20" height="14" rx="2" stroke="#fff" stroke-width="2"/>' +
-          '<rect x="12" y="12" width="8" height="6" rx="1" fill="#fff"/>' +
-          '</svg>';
+        // The glyph is built with createElementNS, NOT innerHTML:
+        // YouTube enforces Trusted Types, so assigning an HTML
+        // string to innerHTML throws and the button never lands
+        // (the diagnostic proved every show-condition was met while
+        // btn stayed NO — the throw was here).
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '22');
+        svg.setAttribute('height', '22');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        var pr1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        pr1.setAttribute('x', '2'); pr1.setAttribute('y', '4');
+        pr1.setAttribute('width', '20'); pr1.setAttribute('height', '14');
+        pr1.setAttribute('rx', '2');
+        pr1.setAttribute('stroke', '#fff'); pr1.setAttribute('stroke-width', '2');
+        var pr2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        pr2.setAttribute('x', '12'); pr2.setAttribute('y', '12');
+        pr2.setAttribute('width', '8'); pr2.setAttribute('height', '6');
+        pr2.setAttribute('rx', '1'); pr2.setAttribute('fill', '#fff');
+        svg.appendChild(pr1); svg.appendChild(pr2);
+        btn.appendChild(svg);
         btn.addEventListener('click', function (ev) {
           ev.preventDefault();
           ev.stopPropagation();
@@ -244,55 +260,6 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       }
     } catch (e) {}
   }
-  // TEMPORARY diagnostic (Austin, 2026-11-24): the PiP button
-  // still isn't showing after the findPipVideo fix — second miss,
-  // so stop guessing and report the real page state. Shows the
-  // path, every <video>'s state, what findPipVideo returns, and
-  // whether the button exists. REMOVE in the same commit as the
-  // fix. If this panel never appears, the new code isn't running
-  // at all (stale bundle) — that alone is the answer.
-  function pipDiag() {
-    try {
-      var el = document.getElementById('rf-pip-diag');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = 'rf-pip-diag';
-        el.style.cssText =
-          'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;' +
-          'background:rgba(0,0,0,0.88);color:#fff;' +
-          'font-family:monospace;font-size:11px;line-height:1.5;' +
-          'padding:8px 10px;border-radius:8px;white-space:pre-wrap;' +
-          'pointer-events:none;';
-        (document.body || document.documentElement).appendChild(el);
-      }
-      var vids = document.querySelectorAll('video');
-      var lines = ['DIAG-PIP path=' + (location.pathname || '')];
-      lines.push('vids=' + vids.length +
-        ' pipEl=' + !!document.pictureInPictureElement +
-        ' fs=' + !!document.fullscreenElement);
-      for (var i = 0; i < vids.length && i < 4; i++) {
-        var vv = vids[i];
-        var rr = vv.getBoundingClientRect();
-        lines.push('v' + i + ': ' + (vv.paused ? 'paused' : 'PLAY') +
-          ' rdy=' + vv.readyState +
-          ' ' + Math.round(rr.width) + 'x' + Math.round(rr.height) +
-          ' @' + Math.round(rr.left) + ',' + Math.round(rr.top) +
-          (vv.webkitDisplayingFullscreen ? ' FULLSCREEN' : ''));
-      }
-      var found = findPipVideo(true);
-      lines.push('find=' + (found ? 'YES' : 'null'));
-      var btn = document.getElementById('rf-pip-btn');
-      if (btn) {
-        var br = btn.getBoundingClientRect();
-        lines.push('btn=YES disp=' + btn.style.display +
-          ' ' + Math.round(br.width) + 'x' + Math.round(br.height) +
-          ' @' + Math.round(br.left) + ',' + Math.round(br.top));
-      } else {
-        lines.push('btn=NO');
-      }
-      el.textContent = lines.join('\\n');
-    } catch (e) {}
-  }
   function apply() {
     try {
       var path = location.pathname;
@@ -302,7 +269,6 @@ export function buildYouTubeScript(settings: FilterSettings): string {
       }
       brandHeaderCenter();
       maintainPipButton();
-      pipDiag();
       if (S.landOnSubs && path === '/') {
         location.replace('/feed/subscriptions');
         return;
