@@ -486,6 +486,7 @@ ${MESSENGER_JS}
         lines[2] += ' seller=' + (found || 'none');
         lines.push('sellerLinks: ' + __rfSellerDiag());
         lines.push('sellerArea: ' + __rfSellerAreaHrefs());
+        lines.push('buttons: ' + __rfMsgButtonDiag());
       }
       return lines;
     } catch (e) { return ['MPA diag error']; }

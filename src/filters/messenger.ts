@@ -132,48 +132,101 @@ export const MESSENGER_JS = `
       return null;
     } catch (e) { return null; }
   }
-  // The seller's numeric user id from the page's embedded JSON
-  // (the listing's initial data). Searches the <script> tags for
-  // "seller_id" followed by a number. Returns the id string or
-  // null. First match wins — the main listing's data loads first.
-  // (Every backslash is doubled in this TS source so the emitted
-  // JS keeps them — the standing template-literal lesson.)
+  // The seller's numeric user id from the page's embedded data.
+  // The seller's name/avatar is not a link (his videos:
+  // sellerArea "no links" and no seller_id in <script> tags), so
+  // the id has to come from the page's data. Searches the full
+  // page HTML for seller-id patterns, including a "seller" /
+  // "owner" object carrying an "id". Returns the id string or
+  // null. Cached per item page — the full-HTML search is expensive
+  // and the diagnostic calls this every second.
+  var __rfSellerJsonCache = { path: '', id: null, done: false };
   function __rfSellerIdFromJson() {
     try {
-      var scripts = document.querySelectorAll('script');
-      for (var i = 0; i < scripts.length; i++) {
-        var text = scripts[i].textContent || '';
-        if (!text) continue;
-        var m = text.match(/"seller_id"\\s*:\\s*"?(\d+)/);
-        if (m) return m[1];
-        m = text.match(/"sellerID"\\s*:\\s*"?(\d+)/);
-        if (m) return m[1];
+      var path = location.pathname || '';
+      if (__rfSellerJsonCache.done && __rfSellerJsonCache.path === path) {
+        return __rfSellerJsonCache.id;
       }
-      return null;
+      var id = null;
+      var html = '';
+      try { html = document.documentElement ? document.documentElement.innerHTML || '' : ''; } catch (e) {}
+      if (html) {
+        var patterns = [
+          /"seller_id"\\s*:\\s*"?(\d+)/,
+          /"sellerID"\\s*:\\s*"?(\d+)/,
+          /"seller_profile_id"\\s*:\\s*"?(\d+)/,
+          /"seller"\\s*:\\s*\{[^}]{0,400}?"id"\\s*:\\s*"?(\d+)/,
+          /"owner"\\s*:\\s*\{[^}]{0,400}?"id"\\s*:\\s*"?(\d+)/,
+          /"profile_id"\\s*:\\s*"?(\d+)/,
+          /"merchant_id"\\s*:\\s*"?(\d+)/
+        ];
+        for (var i = 0; i < patterns.length && !id; i++) {
+          var m = html.match(patterns[i]);
+          if (m) id = m[1];
+        }
+      }
+      __rfSellerJsonCache = { path: path, id: id, done: true };
+      return id;
     } catch (e) { return null; }
   }
   // The anchor hrefs (paths only, first few) inside the "Seller
   // information" area, for the diagnostic panel — so the next
   // retest shows exactly what the seller area actually links to.
+  // Checks EVERY element carrying the seller text (not just the
+  // first — the first match can be a small inner element with no
+  // links while a larger ancestor holds them) and reports from
+  // the one with the most anchors.
   function __rfSellerAreaHrefs() {
     try {
       var all = document.querySelectorAll('div, section, article');
+      var best = null, bestCount = 0, matchCount = 0;
       for (var i = 0; i < all.length; i++) {
         var txt = (all[i].textContent || '');
         if (txt.indexOf('Seller details') < 0 &&
             txt.indexOf('Seller information') < 0) continue;
+        matchCount++;
         var links = all[i].querySelectorAll('a[href]');
-        if (!links.length) return 'no links';
-        var out = [];
-        for (var j = 0; j < links.length && j < 3; j++) {
-          var href = links[j].getAttribute('href') || '';
-          var path = href.replace(/^https?:\\/\\/[^/]+/, '').split('?')[0];
-          out.push(path || href);
-        }
-        return out.join(' | ');
+        if (links.length > bestCount) { best = links; bestCount = links.length; }
       }
-      return 'no seller area';
+      if (!matchCount) return 'no seller area';
+      if (!bestCount) return 'no links (' + matchCount + ' areas)';
+      var out = [];
+      for (var j = 0; j < best.length && j < 3; j++) {
+        var href = best[j].getAttribute('href') || '';
+        var path = href.replace(/^https?:\\/\\/[^/]+/, '').split('?')[0];
+        out.push(path || href);
+      }
+      return out.join(' | ');
     } catch (e) { return 'area error'; }
+  }
+  // Diagnostic for the Message / Send buttons on an item page:
+  // each button's tag and, if it is an anchor, its href. The
+  // Message button's href (when it is one) can carry the thread
+  // or user id directly.
+  function __rfMsgButtonDiag() {
+    try {
+      var msg = __rfFindMsgControl(document.body);
+      // Find the buttons by text instead: the Message button in
+      // the bottom row and the Send button in the composer.
+      var out = [];
+      var els = document.querySelectorAll('a, button, [role="button"], div, span');
+      var foundMsg = null, foundSend = null;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var txt = (el.textContent || '').trim().toLowerCase();
+        if (!foundMsg && txt === 'message') foundMsg = el;
+        if (!foundSend && txt === 'send') foundSend = el;
+        if (foundMsg && foundSend) break;
+      }
+      function desc(el, label) {
+        if (!el) return label + '=none';
+        var tag = (el.tagName || '').toLowerCase();
+        var href = el.getAttribute ? (el.getAttribute('href') || '') : '';
+        var short = href ? href.replace(/^https?:\\/\\/[^/]+/, '').split('?')[0] : '';
+        return label + '=' + tag + (short ? ':' + short : '');
+      }
+      return desc(foundMsg, 'msg') + ' ' + desc(foundSend, 'send');
+    } catch (e) { return 'buttonDiag error'; }
   }
   // Diagnostic for the seller lookup (reported in the MPA panel
   // on item pages): how many profile.php / /people/ /
