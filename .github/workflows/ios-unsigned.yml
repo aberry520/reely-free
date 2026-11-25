@@ -1,0 +1,77 @@
+# Build an unsigned iOS .ipa for Reely Free (Expo SDK 58) on a GitHub macOS runner.
+# The .ipa is uploaded as an artifact; sign + install it with Sideloadly on Windows.
+# Signing is deliberately OFF here (CODE_SIGNING_ALLOWED=NO) — Sideloadly signs it
+# with a free Apple ID on the PC. Release config bundles the JS, so the app runs
+# standalone without a Metro server.
+#
+# Triggers: every push to main that touches the app, or manually via Actions > Run workflow.
+# Note: this repo is private, so macOS runner minutes bill at 10x against the free
+# 2,000 min/month (i.e. ~200 macOS minutes/month). A build takes ~15-25 min.
+# To conserve minutes, remove the `push` trigger and run it manually instead.
+
+name: Build unsigned iOS .ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - 'assets/**'
+      - 'app.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/ios-unsigned.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Prebuild iOS (generate native project)
+        run: npx expo prebuild --platform ios --non-interactive
+
+      - name: Build unsigned .app (Release)
+        run: |
+          xcodebuild \
+            -workspace ios/ReelyFree.xcworkspace \
+            -scheme ReelyFree \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package .ipa
+        run: |
+          APP_PATH=$(find . -name 'ReelyFree.app' -type d -not -path './node_modules/*' | head -n 1)
+          if [ -z "$APP_PATH" ]; then echo "ReelyFree.app not found"; exit 1; fi
+          echo "Found app at: $APP_PATH"
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r app-unsigned.ipa Payload
+
+      - name: Upload .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-unsigned
+          path: app-unsigned.ipa
+          if-no-files-found: error
