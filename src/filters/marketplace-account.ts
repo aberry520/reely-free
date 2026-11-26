@@ -487,6 +487,7 @@ ${MESSENGER_JS}
         lines.push('sellerLinks: ' + __rfSellerDiag());
         lines.push('sellerArea: ' + __rfSellerAreaHrefs());
         lines.push('buttons: ' + __rfMsgButtonDiag());
+        lines.push('details: ' + __rfSellerDetailsDiag());
         lines.push('fiber: ' + __rfFiberDiag());
         lines.push('capture: ' + __rfCaptureDiag());
       }

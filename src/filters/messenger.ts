@@ -502,7 +502,16 @@ export const MESSENGER_JS = `
           ['data-user-id', /data-user-id\\s*=\\s*"(\\d+)/],
           ['data-seller-id', /data-seller-id\\s*=\\s*"(\\d+)/],
           ['data-owner-id', /data-owner-id\\s*=\\s*"(\\d+)/],
-          ['user_id', /"user_id"\\s*:\\s*"?(\\d+)/]
+          ['user_id', /"user_id"\\s*:\\s*"?(\\d+)/],
+          ['seller-ref', /"seller"\\s*:\\s*\\{\\s*"__ref"\\s*:\\s*"?(\\d+)/],
+          ['owner-ref', /"owner"\\s*:\\s*\\{\\s*"__ref"\\s*:\\s*"?(\\d+)/],
+          ['actor-ref', /"actor"\\s*:\\s*\\{\\s*"__ref"\\s*:\\s*"?(\\d+)/],
+          ['fbid', /"fbid"\\s*:\\s*"?(\\d+)/],
+          ['uid', /"uid"\\s*:\\s*"?(\\d+)/],
+          ['profileId', /"profileId"\\s*:\\s*"?(\\d+)/],
+          ['userID', /"userID"\\s*:\\s*"?(\\d+)/],
+          ['ownerId', /"ownerId"\\s*:\\s*"?(\\d+)/],
+          ['sellerId', /"sellerId"\\s*:\\s*"?(\\d+)/]
         ];
         for (var i = 0; i < named.length && !id; i++) {
           var m = html.match(named[i][1]);
@@ -550,6 +559,44 @@ export const MESSENGER_JS = `
   // each button's tag and, if it is an anchor, its href. The
   // Message button's href (when it is one) can carry the thread
   // or user id directly.
+  // Diagnostic for the "Seller details" control on item pages:
+  // its tag, href, and any data-* attributes, plus any long
+  // number in them — the control may carry a profile URL or id
+  // even though the seller area has no anchor links.
+  function __rfSellerDetailsDiag() {
+    try {
+      var all = document.querySelectorAll('a, button, div, span, [role="button"], [role="link"]');
+      var best = null;
+      for (var i = 0; i < all.length; i++) {
+        var t = (all[i].textContent || '').trim();
+        if (t === 'Seller details' || t === 'Seller information') { best = all[i]; break; }
+        if (!best && t.indexOf('Seller details') === 0) best = all[i];
+      }
+      if (!best) return 'none';
+      var tag = (best.tagName || '?').toLowerCase();
+      var href = '';
+      try { href = best.getAttribute('href') || ''; } catch (e) {}
+      var data = [];
+      try {
+        var attrs = best.attributes || [];
+        for (var j = 0; j < attrs.length; j++) {
+          var n = attrs[j].name || '';
+          if (n.indexOf('data-') === 0) data.push(n + '=' + (attrs[j].value || '').slice(0, 40));
+        }
+      } catch (e) {}
+      var nums = [];
+      try {
+        var hay = href + ' ' + data.join(' ');
+        var nm = hay.match(/\\d{5,}/g);
+        if (nm) nums = nm.slice(0, 2);
+      } catch (e) {}
+      var out = tag;
+      if (href) out += ' href=' + href.slice(0, 60);
+      if (data.length) out += ' ' + data.slice(0, 2).join(' ');
+      if (nums.length) out += ' nums=' + nums.join(',');
+      return out;
+    } catch (e) { return 'details error'; }
+  }
   function __rfMsgButtonDiag() {
     try {
       var msg = __rfFindMsgControl(document.body);
