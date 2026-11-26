@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { pushDoorsWidgetSnapshot } from './widgets';
 
 // Reely Free filter settings. Defaults follow Austin's picks (2026-11-22):
 // Messenger stays separate, YouTube lands on Subscriptions, Facebook hides
@@ -225,6 +226,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Keep the home screen widget in sync (Austin's widget ask,
+  // 2026-11-26): push the enabled-doors list whenever settings
+  // load or change, so the widget only shows the doors that are
+  // on. No-ops in Expo Go / web / builds without the widget.
+  useEffect(() => {
+    if (loaded) pushDoorsWidgetSnapshot(settings);
+  }, [loaded, settings]);
 
   const update = useCallback((patch: Partial<FilterSettings>) => {
     setSettings((prev) => {
