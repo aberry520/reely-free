@@ -37,7 +37,49 @@
                   "systemSmall",
                   "systemMedium",
                   "systemLarge"
-                ]
+                ],
+                "configuration": {
+                  "title": "Choose doors",
+                  "description": "Pick which doors this widget shows",
+                  "parameters": {
+                    "door1": {
+                      "title": "First door",
+                      "type": "enum",
+                      "default": "facebook",
+                      "values": [
+                        { "name": "Facebook", "value": "facebook" },
+                        { "name": "Instagram", "value": "instagram" },
+                        { "name": "YouTube", "value": "youtube" },
+                        {
+                          "name": "Marketplace — no account",
+                          "value": "marketplace"
+                        },
+                        {
+                          "name": "Marketplace — with account",
+                          "value": "marketplaceAccount"
+                        }
+                      ]
+                    },
+                    "door2": {
+                      "title": "Second door (medium widget only)",
+                      "type": "enum",
+                      "default": "instagram",
+                      "values": [
+                        { "name": "Facebook", "value": "facebook" },
+                        { "name": "Instagram", "value": "instagram" },
+                        { "name": "YouTube", "value": "youtube" },
+                        {
+                          "name": "Marketplace — no account",
+                          "value": "marketplace"
+                        },
+                        {
+                          "name": "Marketplace — with account",
+                          "value": "marketplaceAccount"
+                        }
+                      ]
+                    }
+                  }
+                }
               },
               "name": "DoorsWidget"
             }

@@ -16,6 +16,11 @@ import {
   getFocusUntil,
   startFocus,
 } from '../src/lib/locks';
+import {
+  formatShortDate,
+  getInstallInfo,
+  type InstallInfo,
+} from '../src/lib/install';
 import { useSettings } from '../src/lib/settings';
 import { useTheme } from '../src/lib/theme';
 import type { UsageAppId } from '../src/lib/usage';
@@ -90,6 +95,7 @@ export default function HomeScreen() {
   >({});
   const [focusUntil, setFocusUntil] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [installInfo, setInstallInfo] = useState<InstallInfo | null>(null);
   useFocusEffect(
     useCallback(() => {
       let live = true;
@@ -112,10 +118,12 @@ export default function HomeScreen() {
           ),
         );
         const focus = await getFocusUntil();
+        const install = await getInstallInfo();
         if (live) {
           setUsage(Object.fromEntries(entries));
           setWeekUsage(Object.fromEntries(weekEntries));
           setFocusUntil(focus);
+          setInstallInfo(install);
         }
       })();
       const iv = setInterval(() => {
@@ -170,6 +178,43 @@ export default function HomeScreen() {
         <Text style={[styles.weekTotal, { color: theme.muted }]}>
           {formatMinutes(weekTotalSec)} across all doors this week
         </Text>
+      )}
+
+      {/* Rebuild countdown (Austin's ask, 2026-11-27): the free
+          Apple ID signing expires 7 days after install. A quiet
+          line while there's time, a loud banner in the last 2 days
+          (or once it's past), with the exact date so he knows the
+          deadline. Sideloadly's Wi-Fi auto-refresh may extend it —
+          the banner says to rebuild or check Sideloadly. */}
+      {installInfo && (
+        <View
+          style={[
+            styles.rebuildCard,
+            {
+              backgroundColor: installInfo.expiringSoon
+                ? theme.accent
+                : theme.surface,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.rebuildText,
+              {
+                color: installInfo.expiringSoon ? '#fff' : theme.text,
+              },
+            ]}
+          >
+            {installInfo.expired
+              ? `This build expired ${formatShortDate(installInfo.expiresAt)} — re-sideload with Sideloadly to keep using Reely Free.`
+              : installInfo.daysLeft <= 1
+                ? `Rebuild today — this build expires ${installInfo.daysLeft === 1 ? 'tomorrow' : 'today'} (${formatShortDate(installInfo.expiresAt)}). Re-sideload with Sideloadly, or check its auto-refresh.`
+                : installInfo.expiringSoon
+                  ? `Rebuild soon — this build expires in ${installInfo.daysLeft} days (${formatShortDate(installInfo.expiresAt)}). Re-sideload with Sideloadly, or check its auto-refresh.`
+                  : `This build expires in ${installInfo.daysLeft} days (${formatShortDate(installInfo.expiresAt)}) — rebuild with Sideloadly before then.`}
+          </Text>
+        </View>
       )}
 
       {settings.featureFacebook && (
@@ -349,6 +394,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   weekTotal: { fontSize: 14, marginTop: -16, marginBottom: 20 },
+  rebuildCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  rebuildText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
   focusCard: {
     borderRadius: 14,
     borderWidth: 1,

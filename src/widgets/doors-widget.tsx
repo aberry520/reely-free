@@ -3,7 +3,10 @@ import {
   containerBackground,
   font,
   foregroundStyle,
+  frame,
+  background,
   padding,
+  shapes,
 } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 import { PlatformColor } from 'react-native';
@@ -22,6 +25,17 @@ import { PlatformColor } from 'react-native';
 // app several times), so the widget renders the full door list from
 // its own defaults until a snapshot arrives. When the app's push
 // does land, it narrows the list to just the enabled doors.
+//
+// Configurable (Austin's ask, 2026-11-27): long-press the widget
+// and tap Edit Widget to pick the doors it shows. The app.json
+// configuration declares two enum parameters (door1, door2); the
+// intent cannot limit them per size, so the limit is enforced here
+// by widget family — small shows only door1, medium shows door1 +
+// door2, large ignores the picks and shows every enabled door.
+// The picks live in WidgetKit (per widget instance) and are never
+// overwritten by the snapshot push; a pick for a door that is now
+// disabled is filtered out here and falls back to the first enabled
+// door(s).
 
 export type WidgetDoor = {
   id: string;
@@ -35,9 +49,17 @@ type DoorsWidgetProps = {
   doors: WidgetDoor[];
 };
 
+// The Edit Widget picks (app.json ios.configuration). Static enums,
+// so a value is always present; the defensive ?? guards a render
+// before the intent is attached.
+type DoorsWidgetConfiguration = {
+  door1: string;
+  door2: string;
+};
+
 const DoorsWidget = (
   props: DoorsWidgetProps,
-  environment: WidgetEnvironment,
+  environment: WidgetEnvironment<DoorsWidgetConfiguration>,
 ) => {
   'widget';
 
@@ -45,6 +67,30 @@ const DoorsWidget = (
   const family = environment.widgetFamily;
   const isSmall = family === 'systemSmall';
   const isLarge = family === 'systemLarge';
+
+  // Which doors to show: intersect the Edit Widget picks with the
+  // enabled pool (a pick for a disabled door is dropped), dedupe,
+  // then take what the size allows — small 1, medium 2, large all.
+  // No usable pick falls back to the first enabled door(s), so the
+  // widget always shows something when doors are enabled.
+  const config = environment.configuration ?? {};
+  const byId = (id: string | undefined) =>
+    id ? doors.find((d) => d.id === id) : undefined;
+  const picked = [config.door1, config.door2]
+    .map((id) => byId(id))
+    .filter((d): d is WidgetDoor => !!d);
+  const uniquePicked = picked.filter(
+    (d, i) => picked.findIndex((x) => x.id === d.id) === i,
+  );
+  const smallDoors =
+    uniquePicked.slice(0, 1).length > 0
+      ? uniquePicked.slice(0, 1)
+      : doors.slice(0, 1);
+  const mediumDoors =
+    uniquePicked.slice(0, 2).length > 0
+      ? uniquePicked.slice(0, 2)
+      : doors.slice(0, 2);
+  const shown = isSmall ? smallDoors : isLarge ? doors : mediumDoors;
 
   const renderDoor = (door: WidgetDoor, compact: boolean) => (
     <Link key={door.id} destination={door.url}>
@@ -82,28 +128,22 @@ const DoorsWidget = (
     </Link>
   );
 
-  // Small (2x2): two columns so all five doors fit. Left column
-  // holds the first half, right column the rest.
+  // Small (2x2): one picked door, styled like a home screen app
+  // icon (Austin's ask, 2026-11-27, from his SmartLife screenshot):
+  // a dark tile, the door's brand colour as a big rounded icon with
+  // its initial in white, and the door name below it in white.
+  // No "Reely Free" header — just the door, like the reference.
+  // The whole widget is a link to the door.
   if (isSmall) {
-    const mid = Math.ceil(doors.length / 2);
-    const left = doors.slice(0, mid);
-    const right = doors.slice(mid);
+    const door = shown[0];
     return (
       <VStack
         modifiers={[
-          containerBackground(PlatformColor('systemBackground'), 'widget'),
-          padding({ all: 10 }),
+          containerBackground('#1c1c1e', 'widget'),
+          padding({ all: 12 }),
         ]}
       >
-        <Text
-          modifiers={[
-            font({ weight: 'bold', size: 14 }),
-            foregroundStyle(PlatformColor('label')),
-          ]}
-        >
-          Reely Free
-        </Text>
-        {doors.length === 0 ? (
+        {shown.length === 0 || !door ? (
           <Link destination="reelyfree://">
             <Text
               modifiers={[
@@ -115,10 +155,34 @@ const DoorsWidget = (
             </Text>
           </Link>
         ) : (
-          <HStack>
-            <VStack>{left.map((d) => renderDoor(d, true))}</VStack>
-            <VStack>{right.map((d) => renderDoor(d, true))}</VStack>
-          </HStack>
+          <Link destination={door.url}>
+            <VStack>
+              <Spacer />
+              <Text
+                modifiers={[
+                  font({ size: 36, weight: 'bold' }),
+                  foregroundStyle('#ffffff'),
+                  frame({ width: 76, height: 76 }),
+                  background(
+                    door.color,
+                    shapes.roundedRectangle({ cornerRadius: 18 }),
+                  ),
+                ]}
+              >
+                {door.label.charAt(0)}
+              </Text>
+              <Text
+                modifiers={[
+                  font({ size: 15, weight: 'bold' }),
+                  foregroundStyle('#ffffff'),
+                  padding({ top: 10 }),
+                ]}
+              >
+                {door.label}
+              </Text>
+              <Spacer />
+            </VStack>
+          </Link>
         )}
       </VStack>
     );
@@ -141,7 +205,7 @@ const DoorsWidget = (
         Reely Free
       </Text>
 
-      {doors.length === 0 ? (
+      {shown.length === 0 ? (
         <Link destination="reelyfree://">
           <Text
             modifiers={[
@@ -153,13 +217,16 @@ const DoorsWidget = (
           </Text>
         </Link>
       ) : (
-        doors.map((door) => renderDoor(door, false))
+        shown.map((door) => renderDoor(door, false))
       )}
     </VStack>
   );
 };
 
-export default createWidget<DoorsWidgetProps>('DoorsWidget', DoorsWidget, {
+export default createWidget<
+  DoorsWidgetProps,
+  DoorsWidgetConfiguration
+>('DoorsWidget', DoorsWidget, {
   doors: [
     {
       id: 'facebook',
