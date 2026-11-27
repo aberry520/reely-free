@@ -39,6 +39,12 @@ import {
 import type { FilterSettings } from '../lib/settings';
 import { useSettings } from '../lib/settings';
 import { isExpoGo } from '../lib/is-expo-go';
+import {
+  DOOR_SESSION_KEYS,
+  ensureSessionRestored,
+  hasSavedSession,
+  saveSessionCookies,
+} from '../lib/session';
 import { useTheme } from '../lib/theme';
 import {
   addUsageSeconds,
@@ -275,6 +281,64 @@ export default function SiteBrowser({
 
   const goHome = () => router.navigate('/');
 
+  // --- Stay logged in (Austin's ask, 2026-11-27) --------------------
+  // The saved session cookies are restored at app launch, but a
+  // door opened in the first instant must not paint its page
+  // before the restore lands, or it loads logged out. So the
+  // WebView waits for the restore (with a 3s cap, so a stuck
+  // restore can never trap the door on the spinner).
+  const [sessionReady, setSessionReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (!cancelled) setSessionReady(true);
+    }, 3000);
+    ensureSessionRestored()
+      .then(() => {
+        if (!cancelled) {
+          clearTimeout(timeout);
+          setSessionReady(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearTimeout(timeout);
+          setSessionReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  // First-time login hint (Austin's ask, 2026-11-27): a door with
+  // no saved session yet is one the user hasn't logged into. Show
+  // a one-time banner pointing at the iOS password manager — tap a
+  // password field, then tap Passwords above the keyboard — so a
+  // first-time user finds their saved login instead of typing it.
+  // Dismissing it records that this door has shown it once.
+  const [showAutofillHint, setShowAutofillHint] = useState(false);
+  const AUTOFILL_HINT_KEY = appId ? `reelyfree-autofill-hint-${appId}` : null;
+  useEffect(() => {
+    if (!appId || !AUTOFILL_HINT_KEY) return;
+    const keys = DOOR_SESSION_KEYS[appId] ?? [];
+    if (keys.length === 0) return;
+    let cancelled = false;
+    Promise.all([
+      hasSavedSession(keys),
+      AsyncStorage.getItem(AUTOFILL_HINT_KEY),
+    ])
+      .then(([hasSession, seen]) => {
+        if (!cancelled && !hasSession && !seen) setShowAutofillHint(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appId]);
+
   // --- Daily usage tracking + limits ---------------------------------
   // Time counts only while this door is the focused screen AND the
   // app is in the foreground — a door sitting under Home in the
@@ -342,6 +406,10 @@ export default function SiteBrowser({
         cancelled = true;
         clearInterval(iv);
         if (pending >= 1) addUsageSeconds(appId, Math.floor(pending));
+        // Leaving the door: bank the session cookies now, so a
+        // reinstall later finds the latest login even if the app
+        // is killed before it backgrounds.
+        saveSessionCookies();
       };
     }, [appId]),
   );
@@ -767,7 +835,7 @@ export default function SiteBrowser({
     Math.max(insets.top + 8, win.height - satTotal - 8),
   );
 
-  if (!loaded) {
+  if (!loaded || !sessionReady) {
     return (
       <View style={[styles.loading, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color={theme.accent} />
@@ -904,6 +972,29 @@ export default function SiteBrowser({
             Reset guest
           </Text>
         </Pressable>
+      )}
+      {showAutofillHint && appId && AUTOFILL_HINT_KEY && (
+        <View
+          style={[
+            styles.warnBanner,
+            { backgroundColor: theme.homeBtnBg, top: insets.top + 8 },
+          ]}
+        >
+          <Text style={[styles.warnText, { color: theme.homeBtnGlyph }]}>
+            Logging in? Tap a password field, then tap Passwords above
+            the keyboard to use your saved login.
+          </Text>
+          <Pressable
+            accessibilityLabel="Dismiss login hint"
+            onPress={() => {
+              setShowAutofillHint(false);
+              AsyncStorage.setItem(AUTOFILL_HINT_KEY, '1').catch(() => {});
+            }}
+            hitSlop={8}
+          >
+            <MaterialIcons name="close" size={16} color={theme.homeBtnGlyph} />
+          </Pressable>
+        </View>
       )}
       {showWarn && limitCfg && (
         <View

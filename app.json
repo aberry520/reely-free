@@ -1,1 +1,58 @@
-{"expo":{"android":{"adaptiveIcon":{"backgroundColor":"#000000","backgroundImage":"./assets/android-icon-background.png","foregroundImage":"./assets/android-icon-foreground.png","monochromeImage":"./assets/android-icon-monochrome.png"},"package":"com.austinberry.reelyfree","predictiveBackGestureEnabled":false},"icon":"./assets/icon.png","ios":{"bundleIdentifier":"com.austinberry.reelyfree","infoPlist":{"LSApplicationQueriesSchemes":["fb-messenger"],"NSLocationWhenInUseUsageDescription":"Reely Free lets the guest Marketplace door use your location when you tap the location button on Facebook's change-location screen."},"supportsTablet":true},"name":"Reely Free","orientation":"portrait","plugins":[["expo-widgets",{"widgets":[{"description":"Your enabled Reely Free doors — tap one to open it.","displayName":"Reely Free Doors","ios":{"initialLayout":"./src/widgets/doors-widget.tsx","supportedFamilies":["systemSmall","systemMedium","systemLarge"]},"name":"DoorsWidget"}]}]],"scheme":"reelyfree","slug":"reely-free","userInterfaceStyle":"automatic","version":"1.0.0","web":{"favicon":"./assets/favicon.png"}}}
+{
+  "expo": {
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.austinberry.reelyfree",
+      "predictiveBackGestureEnabled": false
+    },
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.austinberry.reelyfree",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "fb-messenger"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Reely Free lets the guest Marketplace door use your location when you tap the location button on Facebook's change-location screen."
+      },
+      "supportsTablet": true
+    },
+    "name": "Reely Free",
+    "orientation": "portrait",
+    "plugins": [
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "description": "Your enabled Reely Free doors — tap one to open it.",
+              "displayName": "Reely Free Doors",
+              "ios": {
+                "initialLayout": "./src/widgets/doors-widget.tsx",
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge"
+                ]
+              },
+              "name": "DoorsWidget"
+            }
+          ]
+        }
+      ],
+      "expo-secure-store",
+      "@preeternal/react-native-cookie-manager"
+    ],
+    "scheme": "reelyfree",
+    "slug": "reely-free",
+    "userInterfaceStyle": "automatic",
+    "version": "1.0.0",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

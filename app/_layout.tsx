@@ -1,8 +1,12 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { AppState, Image, StyleSheet, Text, View } from 'react-native';
 import { SettingsProvider, useSettings } from '../src/lib/settings';
+import {
+  ensureSessionRestored,
+  saveSessionCookies,
+} from '../src/lib/session';
 import { useTheme } from '../src/lib/theme';
 
 // No headers on Home, Facebook or YouTube — the site screens are full-screen.
@@ -97,6 +101,20 @@ function AppStack() {
 }
 
 export default function RootLayout() {
+  // Stay logged in (Austin's ask, 2026-11-27): restore the saved
+  // session cookies as soon as the app launches, so the doors open
+  // already logged in, and re-save them whenever the app goes to
+  // the background, so a reinstall finds the latest session.
+  useEffect(() => {
+    ensureSessionRestored();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        saveSessionCookies();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <SettingsProvider>
       <AppStack />
