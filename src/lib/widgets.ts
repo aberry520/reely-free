@@ -18,6 +18,7 @@ type DoorDef = {
     | 'featureMarketplaceAccount';
   id: string;
   label: string;
+  shortLabel: string;
   color: string;
   route: string;
 };
@@ -27,6 +28,7 @@ const ALL_DOORS: DoorDef[] = [
     key: 'featureFacebook',
     id: 'facebook',
     label: 'Facebook',
+    shortLabel: 'Facebook',
     color: '#1877f2',
     route: '/facebook',
   },
@@ -34,6 +36,7 @@ const ALL_DOORS: DoorDef[] = [
     key: 'featureInstagram',
     id: 'instagram',
     label: 'Instagram',
+    shortLabel: 'Instagram',
     color: '#c13584',
     route: '/instagram',
   },
@@ -41,6 +44,7 @@ const ALL_DOORS: DoorDef[] = [
     key: 'featureYouTube',
     id: 'youtube',
     label: 'YouTube',
+    shortLabel: 'YouTube',
     color: '#c4302b',
     route: '/youtube',
   },
@@ -48,6 +52,7 @@ const ALL_DOORS: DoorDef[] = [
     key: 'featureGuestMarketplace',
     id: 'marketplace',
     label: 'Marketplace — no account',
+    shortLabel: 'MP Guest',
     color: '#0f766e',
     route: '/marketplace',
   },
@@ -55,6 +60,7 @@ const ALL_DOORS: DoorDef[] = [
     key: 'featureMarketplaceAccount',
     id: 'marketplaceAccount',
     label: 'Marketplace — with account',
+    shortLabel: 'MP Acct',
     color: '#1e40af',
     route: '/marketplace-account',
   },
@@ -64,6 +70,7 @@ export function doorsForWidget(settings: FilterSettings): WidgetDoor[] {
   return ALL_DOORS.filter((d) => settings[d.key]).map((d) => ({
     id: d.id,
     label: d.label,
+    shortLabel: d.shortLabel,
     color: d.color,
     url: `reelyfree://${d.route.slice(1)}`,
   }));
@@ -72,6 +79,9 @@ export function doorsForWidget(settings: FilterSettings): WidgetDoor[] {
 export function pushDoorsWidgetSnapshot(settings: FilterSettings): void {
   try {
     DoorsWidget.updateSnapshot({ doors: doorsForWidget(settings) });
+    // Force the system to refresh the widget immediately; the
+    // snapshot alone was not reaching it on Austin's phone.
+    DoorsWidget.reload();
   } catch {
     // Widget extension unavailable (Expo Go, web, older build).
   }
