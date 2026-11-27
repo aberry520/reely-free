@@ -182,11 +182,20 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   mpBedtimeHour: 0,
   mpaBedtimeHour: 0,
   diagnosticsEnabled: false,
-  fbOpenMessenger: true,
-  mpaOpenMessenger: true,
+  // Off by default (Austin, 2026-11-27): the Messenger opener
+  // kept missing the seller, so it stands down until he turns
+  // it on. The toggles are still in Settings to flip back.
+  fbOpenMessenger: false,
+  mpaOpenMessenger: false,
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';
+// One-time migration (Austin, 2026-11-27): the Messenger opener
+// now defaults OFF. A stored `true` from before would win over
+// the new default, so the first launch after this change forces
+// both toggles off and records that it ran — after that the
+// toggles are the user's to flip.
+const MSG_OFF_MIGRATION_KEY = 'reelyfree-msg-off-migrated-v1';
 
 interface SettingsContextValue {
   settings: FilterSettings;
@@ -206,22 +215,46 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (cancelled) return;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        let next: FilterSettings = DEFAULT_SETTINGS;
         if (raw) {
           try {
             const parsed = JSON.parse(raw) as Partial<FilterSettings>;
-            setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+            next = { ...DEFAULT_SETTINGS, ...parsed };
           } catch {
             // Corrupt saved settings: fall back to defaults.
           }
         }
+        // Messenger default-off migration (see MSG_OFF_MIGRATION_KEY).
+        try {
+          const migrated = await AsyncStorage.getItem(
+            MSG_OFF_MIGRATION_KEY,
+          );
+          if (!migrated) {
+            next = {
+              ...next,
+              fbOpenMessenger: false,
+              mpaOpenMessenger: false,
+            };
+            await AsyncStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify(next),
+            );
+            await AsyncStorage.setItem(MSG_OFF_MIGRATION_KEY, '1');
+          }
+        } catch {
+          // Migration is best-effort; the new defaults still apply
+          // to any setting the stored copy doesn't carry.
+        }
+        if (cancelled) return;
+        setSettings(next);
         setLoaded(true);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setLoaded(true);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
