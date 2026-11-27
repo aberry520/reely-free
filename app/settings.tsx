@@ -400,12 +400,6 @@ export default function SettingsScreen() {
                 value={settings.fbBrandHeader}
                 onChange={set('fbBrandHeader')}
               />
-              <ToggleRow
-                label="Open Messenger app"
-                detail="Tapping a message link opens the Messenger app to that conversation instead of loading messages in here. Facebook's mobile web pushes its own app for messaging; this goes straight to Messenger."
-                value={settings.fbOpenMessenger}
-                onChange={set('fbOpenMessenger')}
-              />
               <UsageLimitRows
                 usedSec={usage.facebook ?? 0}
                 weekSec={weekUsage.facebook ?? 0}
@@ -599,12 +593,6 @@ export default function SettingsScreen() {
                 detail="Message threads stay reachable, so you can talk to buyers and sellers. Off = Marketplace only, no messages."
                 value={settings.mpaAllowMessages}
                 onChange={set('mpaAllowMessages')}
-              />
-              <ToggleRow
-                label="Open Messenger app"
-                detail="Tapping Message (or Send) on a listing opens the Messenger app to that seller instead of hitting Facebook's 'use the app' prompt, which blocks messaging on the mobile web."
-                value={settings.mpaOpenMessenger}
-                onChange={set('mpaOpenMessenger')}
               />
               <ToggleRow
                 label="Block 'Open app' bar"

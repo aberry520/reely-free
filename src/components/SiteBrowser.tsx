@@ -15,7 +15,6 @@ import {
   AppState,
   Dimensions,
   Image,
-  Linking,
   PanResponder,
   Pressable,
   Share,
@@ -102,12 +101,6 @@ interface SiteBrowserProps {
   // Marketplace door: Facebook's share dialog wants a login). The app
   // answers with the phone's own share sheet carrying that link.
   nativeShare?: boolean;
-  // The page's filter script can post {type:'rf-messenger', user}
-  // when the user taps a message control (Facebook + Marketplace
-  // with account doors). The app answers by opening the Messenger
-  // app to that user, instead of Facebook's "use the app" prompt
-  // blocking messaging on the mobile web.
-  openMessenger?: boolean;
 }
 
 export type AppId =
@@ -248,7 +241,6 @@ export default function SiteBrowser({
   blockUrlFragments,
   appId,
   nativeShare,
-  openMessenger,
 }: SiteBrowserProps) {
   const { settings, loaded } = useSettings();
   // Getting Home has no feature master (Austin's hierarchy,
@@ -887,7 +879,6 @@ export default function SiteBrowser({
             const data = JSON.parse(event.nativeEvent.data) as {
               type?: string;
               url?: string;
-              user?: string | null;
             };
             if (
               nativeShare &&
@@ -896,32 +887,6 @@ export default function SiteBrowser({
               data.url.startsWith('https://')
             ) {
               Share.share({ url: data.url }).catch(() => {});
-            }
-            // Messenger open (Austin's ask, 2026-11-24): the filter
-            // posts the seller/user the tap was for. A numeric id
-            // opens that thread via the Messenger scheme; a
-            // username opens its m.me universal link (which the
-            // Messenger app claims); no user at all just opens the
-            // Messenger inbox. If the app open fails (Messenger not
-            // installed), fall back to the m.me web link, which
-            // lands on the App Store / web Messenger. The
-            // pre-filled composer text does NOT carry over —
-            // Messenger has no deep link that pre-fills a message.
-            if (openMessenger && data.type === 'rf-messenger') {
-              const user =
-                typeof data.user === 'string' ? data.user : '';
-              const appUrl = user
-                ? /^\d+$/.test(user)
-                  ? `fb-messenger://user-thread/${user}`
-                  : `https://m.me/${user}`
-                : 'fb-messenger://';
-              Linking.openURL(appUrl).catch(() => {
-                if (user) {
-                  Linking.openURL(`https://m.me/${user}`).catch(
-                    () => {},
-                  );
-                }
-              });
             }
           } catch {
             // Not one of ours — ignore.

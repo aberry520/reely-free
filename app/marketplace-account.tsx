@@ -17,7 +17,6 @@ export default function MarketplaceAccountScreen() {
       appId="marketplaceAccount"
       homeUrl="https://www.facebook.com/marketplace"
       buildScript={buildMarketplaceAccountScript}
-      openMessenger
     />
   );
 }

@@ -1,7 +1,6 @@
 import type { FilterSettings } from '../lib/settings';
 import { LOGO_FULL_DATA_URI, LOGO_MARK_DATA_URI } from './logo-data';
 import { DIAG_JS } from './diag';
-import { MESSENGER_JS } from './messenger';
 
 // Builds the JavaScript injected into facebook.com before page content
 // loads. Rules target stable hooks (URLs, role="article", visible label
@@ -20,7 +19,6 @@ export function buildFacebookScript(settings: FilterSettings): string {
     stickyHeader: settings.fbStickyHeader,
     brandHeader: settings.fbBrandHeader,
     diagnostics: settings.diagnosticsEnabled,
-    openMessenger: settings.fbOpenMessenger,
   });
   const mark = JSON.stringify(LOGO_MARK_DATA_URI);
   const logo = JSON.stringify(LOGO_FULL_DATA_URI);
@@ -31,7 +29,6 @@ export function buildFacebookScript(settings: FilterSettings): string {
   var MARK = ${mark};
   var LOGO = ${logo};
 ${DIAG_JS}
-${MESSENGER_JS}
   function hide(el) {
     if (el && !el.getAttribute('data-rf-hidden')) {
       el.setAttribute('data-rf-hidden', '1');
@@ -652,30 +649,6 @@ ${MESSENGER_JS}
         flashSwipeIcon();
       } catch (err) {}
     }, { capture: true, passive: false });
-  }
-  // Open the Messenger app on message links (Austin's ask,
-  // 2026-11-24): a tap on a link to a message thread
-  // (/messages/t/<id>, messenger.com, m.me/<user>) opens the
-  // Messenger app to that conversation instead of loading
-  // messages in here. Independent of the Reels block above — it
-  // runs whenever S.openMessenger is on, even with Reels off.
-  if (S.openMessenger) {
-    try {
-      document.addEventListener('click', function (e) {
-        try {
-          var t = e.target;
-          var a = t && t.closest ? t.closest('a[href]') : null;
-          if (!a) return;
-          var href = a.getAttribute('href') || '';
-          var user = __rfMessengerUserFromHref(href);
-          if (!user) return;
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-          __rfMessengerPost(user);
-        } catch (err) {}
-      }, true);
-    } catch (err) {}
   }
   // Diagnostic lines (Austin's ask, 2026-11-24): what the door's
   // filter sees, behind the Settings toggle. viewer = a video
