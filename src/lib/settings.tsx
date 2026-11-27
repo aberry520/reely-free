@@ -115,6 +115,15 @@ export interface FilterSettings {
   // or covered. Turn it on when testing a new feature, off when
   // you're done. Off by default.
   diagnosticsEnabled: boolean;
+  // Open the Messenger app on message taps (Austin's ask,
+  // 2026-11-24): tapping Message on a listing (or a message link
+  // on Facebook) hits Facebook's "Experience the best of
+  // Marketplace on Facebook app" prompt on the mobile web, which
+  // blocks messaging the seller. With this on, the tap opens the
+  // Messenger app to that seller instead. Facebook door + the
+  // Marketplace-with-account door only.
+  fbOpenMessenger: boolean;
+  mpaOpenMessenger: boolean;
 }
 
 export const DEFAULT_SETTINGS: FilterSettings = {
@@ -173,6 +182,8 @@ export const DEFAULT_SETTINGS: FilterSettings = {
   mpBedtimeHour: 0,
   mpaBedtimeHour: 0,
   diagnosticsEnabled: false,
+  fbOpenMessenger: true,
+  mpaOpenMessenger: true,
 };
 
 const STORAGE_KEY = 'reelyfree-settings-v1';

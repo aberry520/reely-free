@@ -8,6 +8,7 @@ export default function FacebookScreen() {
       appId="facebook"
       homeUrl="https://www.facebook.com/"
       buildScript={buildFacebookScript}
+      openMessenger
     />
   );
 }

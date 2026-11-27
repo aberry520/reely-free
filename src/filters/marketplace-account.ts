@@ -2,6 +2,7 @@ import type { FilterSettings } from '../lib/settings';
 import { LOGO_MARK_DATA_URI } from './logo-data';
 import { PHOTO_VIEWER_JS } from './photo-viewer';
 import { DIAG_JS } from './diag';
+import { MESSENGER_JS } from './messenger';
 
 // Builds the JavaScript injected into facebook.com before page
 // content loads, for the Marketplace door WITH his account
@@ -60,6 +61,7 @@ export function buildMarketplaceAccountScript(
     blockAppPromo: settings.mpaBlockAppPromo,
     brandHeader: settings.mpaBrandHeader,
     diagnostics: settings.diagnosticsEnabled,
+    openMessenger: settings.mpaOpenMessenger,
   });
   const logo = JSON.stringify(LOGO_MARK_DATA_URI);
 
@@ -70,6 +72,7 @@ export function buildMarketplaceAccountScript(
   var HOME = 'https://www.facebook.com/marketplace';
   var LOGO_SRC = ${logo};
 ${DIAG_JS}
+${MESSENGER_JS}
   function isFb() {
     return /(^|\\.)facebook\\.com$/.test(location.hostname);
   }
@@ -187,6 +190,44 @@ ${DIAG_JS}
         }
       } catch (e) {}
     }, true);
+  }
+  // Open the Messenger app on message taps (Austin's ask,
+  // 2026-11-24): on a listing, tapping Message (or Send in the
+  // "Send seller a message" composer) hits Facebook's "Experience
+  // the best of Marketplace on Facebook app" prompt on the mobile
+  // web, which blocks messaging the seller. Instead the tap opens
+  // the Messenger app to that seller. Installed once, independent
+  // of the stay guard above (messaging should open Messenger even
+  // with Stay off). The pre-filled composer text does NOT carry
+  // over — Messenger has no deep link that pre-fills a message —
+  // so he types it in Messenger.
+  if (S.openMessenger) {
+    try {
+      document.addEventListener('click', function (ev) {
+        try {
+          if (!isFb()) return;
+          if (location.pathname.indexOf('/marketplace/item/') !== 0) return;
+          var t = ev.target;
+          // The control: an anchor with a messages href, or the
+          // Message/Send button found by walking up from the tap
+          // (the bottom-row Message button can be a plain div, so
+          // closest('a, button, [role="button"]') misses it — his
+          // video, 2026-11-24: the prompt still fired on a tap).
+          var user = null;
+          var a = t && t.closest ? t.closest('a[href]') : null;
+          if (a) user = __rfMessengerUserFromHref(a.getAttribute('href'));
+          if (!user) {
+            var ctrl = __rfFindMsgControl(t);
+            if (!ctrl) return;
+            user = __rfMessengerFindSeller();
+          }
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+          __rfMessengerPost(user);
+        } catch (e) {}
+      }, true);
+    } catch (e) {}
   }
   // The 'Open app' bar: ported from the Facebook door's filter.
   // Find the innermost element carrying one of the known labels
@@ -440,6 +481,16 @@ ${DIAG_JS}
         'cover=' + (cover ? 'YES' : 'NO') +
           ' viewer=' + (viewer ? 'YES' : 'NO'),
       ];
+      if (location.pathname.indexOf('/marketplace/item/') === 0) {
+        var found = __rfMessengerFindSeller();
+        lines[2] += ' seller=' + (found || 'none');
+        lines.push('sellerLinks: ' + __rfSellerDiag());
+        lines.push('sellerArea: ' + __rfSellerAreaHrefs());
+        lines.push('buttons: ' + __rfMsgButtonDiag());
+        lines.push('details: ' + __rfSellerDetailsDiag());
+        lines.push('fiber: ' + __rfFiberDiag());
+        lines.push('capture: ' + __rfCaptureDiag());
+      }
       return lines;
     } catch (e) { return ['MPA diag error']; }
   }
